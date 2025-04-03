@@ -34,6 +34,7 @@ async function fetchAvailableModels() {
 function updateProjectHierarchy() {
     const hierarchyPanel = document.getElementById('hierarchy-panel');
     const models = engine.getSceneModels();
+    const spawnPoints = engine.getSpawnPoints();
     
     // Clear existing items
     hierarchyPanel.innerHTML = '';
@@ -47,20 +48,51 @@ function updateProjectHierarchy() {
     `;
     hierarchyPanel.appendChild(sceneItem);
     
-    // Add models
-    models.forEach(model => {
-        const modelItem = document.createElement('div');
-        modelItem.className = 'hierarchy-item model-item';
-        modelItem.innerHTML = `
-            <span class="hierarchy-icon">🔷</span>
-            <span class="hierarchy-name">${model.name}</span>
-            <div class="hierarchy-actions">
-                <button class="hierarchy-action-btn" onclick="selectModel('${model.name}')">Select</button>
-                <button class="hierarchy-action-btn" onclick="deleteModel('${model.name}')">Delete</button>
-            </div>
-        `;
-        hierarchyPanel.appendChild(modelItem);
-    });
+    // Add models section
+    if (models.length > 0) {
+        const modelsSection = document.createElement('div');
+        modelsSection.className = 'hierarchy-section';
+        modelsSection.innerHTML = '<div class="hierarchy-section-title">Models</div>';
+        
+        models.forEach(model => {
+            const modelItem = document.createElement('div');
+            modelItem.className = 'hierarchy-item model-item';
+            modelItem.innerHTML = `
+                <span class="hierarchy-icon">🔷</span>
+                <span class="hierarchy-name">${model.name}</span>
+                <div class="hierarchy-actions">
+                    <button class="hierarchy-action-btn" onclick="selectModel('${model.name}')">Select</button>
+                    <button class="hierarchy-action-btn" onclick="deleteModel('${model.name}')">Delete</button>
+                </div>
+            `;
+            modelsSection.appendChild(modelItem);
+        });
+        
+        hierarchyPanel.appendChild(modelsSection);
+    }
+    
+    // Add spawn points section
+    if (spawnPoints.length > 0) {
+        const spawnPointsSection = document.createElement('div');
+        spawnPointsSection.className = 'hierarchy-section';
+        spawnPointsSection.innerHTML = '<div class="hierarchy-section-title">Spawn Points</div>';
+        
+        spawnPoints.forEach((spawnPoint, index) => {
+            const spawnPointItem = document.createElement('div');
+            spawnPointItem.className = 'hierarchy-item spawn-point-item';
+            spawnPointItem.innerHTML = `
+                <span class="hierarchy-icon">📍</span>
+                <span class="hierarchy-name">Spawn Point ${index + 1}</span>
+                <div class="hierarchy-actions">
+                    <button class="hierarchy-action-btn" onclick="selectSpawnPoint(${index})">Select</button>
+                    <button class="hierarchy-action-btn" onclick="deleteSpawnPoint(${index})">Delete</button>
+                </div>
+            `;
+            spawnPointsSection.appendChild(spawnPointItem);
+        });
+        
+        hierarchyPanel.appendChild(spawnPointsSection);
+    }
 }
 
 // Call this function when the page loads
@@ -91,7 +123,54 @@ document.addEventListener('DOMContentLoaded', () => {
             event.target.value = '';
         }
     });
+    
+    // Set up spawn point buttons
+    document.getElementById('create-spawn-point').addEventListener('click', () => {
+        engine.startPlacingSpawnPoint();
+        updateSpawnPointButtons();
+    });
+    
+    document.getElementById('move-spawn-point').addEventListener('click', () => {
+        engine.startMovingSpawnPoint();
+        updateSpawnPointButtons();
+    });
+    
+    document.getElementById('delete-spawn-point').addEventListener('click', () => {
+        engine.deleteSelectedSpawnPoint();
+        updateProjectHierarchy();
+        updateSpawnPointButtons();
+    });
+    
+    document.getElementById('cancel-spawn-point').addEventListener('click', () => {
+        engine.cancelPlacingSpawnPoint();
+        updateSpawnPointButtons();
+    });
 });
+
+// Update spawn point buttons based on current state
+function updateSpawnPointButtons() {
+    const createBtn = document.getElementById('create-spawn-point');
+    const moveBtn = document.getElementById('move-spawn-point');
+    const deleteBtn = document.getElementById('delete-spawn-point');
+    const cancelBtn = document.getElementById('cancel-spawn-point');
+    
+    if (engine.isPlacingSpawnPoint) {
+        createBtn.disabled = true;
+        moveBtn.disabled = true;
+        deleteBtn.disabled = true;
+        cancelBtn.disabled = false;
+    } else if (engine.isMovingSpawnPoint) {
+        createBtn.disabled = true;
+        moveBtn.disabled = true;
+        deleteBtn.disabled = false;
+        cancelBtn.disabled = false;
+    } else {
+        createBtn.disabled = false;
+        moveBtn.disabled = engine.getSpawnPoints().length === 0;
+        deleteBtn.disabled = !engine.selectedSpawnPoint;
+        cancelBtn.disabled = true;
+    }
+}
 
 // Make functions available globally
 window.loadModel = async function() {
@@ -291,4 +370,27 @@ window.selectModel = function(name) {
     // Update position display
     document.getElementById('position-display').innerHTML = 
         `Position: X: ${position.x.toFixed(2)}, Y: ${position.y.toFixed(2)}, Z: ${position.z.toFixed(2)}`;
+};
+
+window.selectSpawnPoint = function(index) {
+    const spawnPoints = engine.getSpawnPoints();
+    if (index >= 0 && index < spawnPoints.length) {
+        const spawnPoint = spawnPoints[index];
+        engine.selectedSpawnPoint = engine.spawnPoints[index];
+        updateSpawnPointButtons();
+        
+        // Update position display
+        document.getElementById('position-display').innerHTML = 
+            `Spawn Point Position: X: ${spawnPoint.position.x.toFixed(2)}, Y: ${spawnPoint.position.y.toFixed(2)}, Z: ${spawnPoint.position.z.toFixed(2)}`;
+    }
+};
+
+window.deleteSpawnPoint = function(index) {
+    const spawnPoints = engine.getSpawnPoints();
+    if (index >= 0 && index < spawnPoints.length) {
+        engine.selectedSpawnPoint = engine.spawnPoints[index];
+        engine.deleteSelectedSpawnPoint();
+        updateProjectHierarchy();
+        updateSpawnPointButtons();
+    }
 }; 

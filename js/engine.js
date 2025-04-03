@@ -17,6 +17,25 @@ class GameEngine {
         this.currentSceneName = "Untitled Scene";
         this.sceneHistory = [];
         this.historyIndex = -1;
+        
+        // Spawn point properties
+        this.spawnPoints = [];
+        this.isPlacingSpawnPoint = false;
+        this.isMovingSpawnPoint = false;
+        this.selectedSpawnPoint = null;
+        this.raycaster = new THREE.Raycaster();
+        this.mouse = new THREE.Vector2();
+        this.spawnPointGeometry = new THREE.CircleGeometry(0.5, 32);
+        this.spawnPointMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xffff00,
+            transparent: true,
+            opacity: 0.8
+        });
+        this.spawnPointGlowMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xffff00,
+            transparent: true,
+            opacity: 0.8
+        });
 
         // Wait for DOM to be ready
         if (document.readyState === 'loading') {
@@ -78,6 +97,11 @@ class GameEngine {
         this.originMarker = new THREE.Mesh(geometry, material);
         this.scene.add(this.originMarker);
         
+        // Add mouse event listeners for spawn point placement
+        this.renderer.domElement.addEventListener('mousemove', (event) => this.onMouseMove(event));
+        this.renderer.domElement.addEventListener('click', (event) => this.onMouseClick(event));
+        this.renderer.domElement.addEventListener('wheel', (event) => this.onMouseWheel(event));
+        
         // Handle window resize
         window.addEventListener('resize', () => {
             const width = window.innerWidth - 300;
@@ -104,16 +128,20 @@ class GameEngine {
             this.controls.update();
         }
         
+        // Update spawn point glow effect
+        if (this.isPlacingSpawnPoint && this.selectedSpawnPoint) {
+            this.selectedSpawnPoint.material.opacity = 0.5 + Math.sin(Date.now() * 0.005) * 0.3;
+        }
+        
         this.renderer.render(this.scene, this.camera);
     }
 
     // Scene management methods
     saveSceneState() {
-        // Create a snapshot of the current scene
         const sceneState = {
             name: this.currentSceneName,
             models: Array.from(this.models.entries()).map(([name, model]) => ({
-                name: name,
+                name,
                 url: model.userData.url || '',
                 position: {
                     x: model.position.x,
@@ -131,6 +159,7 @@ class GameEngine {
                     z: model.rotation.z
                 }
             })),
+            spawnPoints: this.getSpawnPoints(),
             camera: {
                 position: {
                     x: this.camera.position.x,
@@ -146,14 +175,9 @@ class GameEngine {
         };
         
         // Add to history
-        this.sceneHistory.push(JSON.stringify(sceneState));
+        this.sceneHistory = this.sceneHistory.slice(0, this.historyIndex + 1);
+        this.sceneHistory.push(sceneState);
         this.historyIndex = this.sceneHistory.length - 1;
-        
-        // Limit history size
-        if (this.sceneHistory.length > 50) {
-            this.sceneHistory.shift();
-            this.historyIndex--;
-        }
         
         return sceneState;
     }
@@ -217,6 +241,20 @@ class GameEngine {
             }
         }
         
+        // Load spawn points
+        for (const spawnPointData of sceneState.spawnPoints) {
+            const spawnPoint = new THREE.Mesh(this.spawnPointGeometry, this.spawnPointMaterial.clone());
+            spawnPoint.rotation.x = -Math.PI / 2;
+            spawnPoint.position.set(
+                spawnPointData.position.x,
+                spawnPointData.position.y,
+                spawnPointData.position.z
+            );
+            
+            this.scene.add(spawnPoint);
+            this.spawnPoints.push(spawnPoint);
+        }
+        
         // Set camera position and target if available
         if (sceneState.camera) {
             if (sceneState.camera.position) {
@@ -264,6 +302,18 @@ class GameEngine {
         this.camera.lookAt(0, 0, 0);
         this.controls.target.set(0, 0, 0);
         this.controls.update();
+        
+        // Remove all spawn points
+        for (const spawnPoint of this.spawnPoints) {
+            this.scene.remove(spawnPoint);
+        }
+        this.spawnPoints = [];
+        
+        // Reset state
+        this.selectedSpawnPoint = null;
+        this.isPlacingSpawnPoint = false;
+        this.isMovingSpawnPoint = false;
+        this.renderer.domElement.style.cursor = 'auto';
     }
     
     setSceneName(name) {
@@ -462,6 +512,182 @@ class GameEngine {
             };
         }
         return null;
+    }
+
+    // Spawn point methods
+    startPlacingSpawnPoint() {
+        this.isPlacingSpawnPoint = true;
+        this.isMovingSpawnPoint = false;
+        this.selectedSpawnPoint = null;
+        
+        // Create a new spawn point mesh
+        const spawnPoint = new THREE.Mesh(this.spawnPointGeometry, this.spawnPointGlowMaterial.clone());
+        spawnPoint.rotation.x = -Math.PI / 2; // Rotate to lie flat on the ground
+        spawnPoint.position.y = 0.01; // Slightly above the ground to prevent z-fighting
+        
+        this.scene.add(spawnPoint);
+        this.selectedSpawnPoint = spawnPoint;
+        
+        // Change cursor style
+        this.renderer.domElement.style.cursor = 'crosshair';
+        
+        console.log('Started placing spawn point');
+    }
+    
+    cancelPlacingSpawnPoint() {
+        if (this.selectedSpawnPoint && this.isPlacingSpawnPoint) {
+            this.scene.remove(this.selectedSpawnPoint);
+            this.selectedSpawnPoint = null;
+        }
+        
+        this.isPlacingSpawnPoint = false;
+        this.isMovingSpawnPoint = false;
+        this.renderer.domElement.style.cursor = 'auto';
+        
+        console.log('Cancelled placing spawn point');
+    }
+    
+    placeSpawnPoint() {
+        if (!this.selectedSpawnPoint || !this.isPlacingSpawnPoint) return;
+        
+        // Change material to static
+        this.selectedSpawnPoint.material = this.spawnPointMaterial.clone();
+        
+        // Add to spawn points array
+        this.spawnPoints.push(this.selectedSpawnPoint);
+        
+        // Reset state
+        this.selectedSpawnPoint = null;
+        this.isPlacingSpawnPoint = false;
+        this.renderer.domElement.style.cursor = 'auto';
+        
+        // Save scene state
+        this.saveSceneState();
+        
+        console.log('Spawn point placed');
+    }
+    
+    startMovingSpawnPoint() {
+        if (this.spawnPoints.length === 0) {
+            console.log('No spawn points to move');
+            return;
+        }
+        
+        this.isMovingSpawnPoint = true;
+        this.isPlacingSpawnPoint = false;
+        this.renderer.domElement.style.cursor = 'move';
+        
+        console.log('Started moving spawn point mode');
+    }
+    
+    onMouseMove(event) {
+        // Calculate mouse position in normalized device coordinates
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        // Update raycaster
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        
+        // If placing or moving a spawn point, update its position
+        if ((this.isPlacingSpawnPoint || this.isMovingSpawnPoint) && this.selectedSpawnPoint) {
+            // Find intersection with ground plane (y=0)
+            const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            const intersectionPoint = new THREE.Vector3();
+            
+            this.raycaster.ray.intersectPlane(groundPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                this.selectedSpawnPoint.position.x = intersectionPoint.x;
+                this.selectedSpawnPoint.position.z = intersectionPoint.z;
+            }
+        }
+    }
+    
+    onMouseClick(event) {
+        // Calculate mouse position in normalized device coordinates
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        // Update raycaster
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        
+        if (this.isPlacingSpawnPoint && this.selectedSpawnPoint) {
+            // Place the spawn point
+            this.placeSpawnPoint();
+        } else if (this.isMovingSpawnPoint) {
+            // Check if we clicked on a spawn point
+            const intersects = this.raycaster.intersectObjects(this.spawnPoints);
+            
+            if (intersects.length > 0) {
+                // Select the spawn point
+                this.selectedSpawnPoint = intersects[0].object;
+                console.log('Selected spawn point for moving');
+            } else {
+                // Deselect if we clicked elsewhere
+                this.selectedSpawnPoint = null;
+            }
+        } else {
+            // Check if we clicked on a spawn point
+            const intersects = this.raycaster.intersectObjects(this.spawnPoints);
+            
+            if (intersects.length > 0) {
+                // Select the spawn point
+                this.selectedSpawnPoint = intersects[0].object;
+                console.log('Selected spawn point');
+            } else {
+                // Deselect if we clicked elsewhere
+                this.selectedSpawnPoint = null;
+            }
+        }
+    }
+    
+    onMouseWheel(event) {
+        if (this.selectedSpawnPoint && (this.isPlacingSpawnPoint || this.isMovingSpawnPoint)) {
+            // Move the spawn point up or down
+            const delta = event.deltaY * 0.01;
+            this.selectedSpawnPoint.position.y += delta;
+            
+            // Ensure it doesn't go below the ground
+            if (this.selectedSpawnPoint.position.y < 0.01) {
+                this.selectedSpawnPoint.position.y = 0.01;
+            }
+        }
+    }
+    
+    deleteSelectedSpawnPoint() {
+        if (this.selectedSpawnPoint) {
+            // Remove from scene
+            this.scene.remove(this.selectedSpawnPoint);
+            
+            // Remove from spawn points array
+            const index = this.spawnPoints.indexOf(this.selectedSpawnPoint);
+            if (index !== -1) {
+                this.spawnPoints.splice(index, 1);
+            }
+            
+            // Reset state
+            this.selectedSpawnPoint = null;
+            this.isPlacingSpawnPoint = false;
+            this.isMovingSpawnPoint = false;
+            this.renderer.domElement.style.cursor = 'auto';
+            
+            // Save scene state
+            this.saveSceneState();
+            
+            console.log('Spawn point deleted');
+        }
+    }
+    
+    getSpawnPoints() {
+        return this.spawnPoints.map(spawnPoint => ({
+            position: {
+                x: spawnPoint.position.x,
+                y: spawnPoint.position.y,
+                z: spawnPoint.position.z
+            }
+        }));
     }
 }
 
