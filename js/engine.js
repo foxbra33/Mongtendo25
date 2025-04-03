@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 
 class GameEngine {
     constructor() {
@@ -75,27 +77,101 @@ class GameEngine {
 
     // Model management methods
     async loadModel(url, name, position = { x: 0, y: 0, z: 0 }, scale = { x: 1, y: 1, z: 1 }) {
-        const loader = new GLTFLoader();
+        console.log(`Loading model: ${url} with name: ${name}`);
+        console.log(`Position: ${position.x}, ${position.y}, ${position.z}`);
+        console.log(`Scale: ${scale.x}, ${scale.y}, ${scale.z}`);
+        
         try {
-            const gltf = await loader.loadAsync(url);
-            const model = gltf.scene;
+            let model;
+            const fileExtension = url.split('.').pop().toLowerCase();
             
+            if (fileExtension === 'obj') {
+                // Load OBJ file
+                console.log('Loading OBJ file...');
+                const objLoader = new OBJLoader();
+                
+                // Check if there's a corresponding MTL file
+                const mtlUrl = url.replace('.obj', '.mtl');
+                try {
+                    const mtlLoader = new MTLLoader();
+                    const materials = await mtlLoader.loadAsync(mtlUrl);
+                    materials.preload();
+                    objLoader.setMaterials(materials);
+                    console.log('MTL materials loaded successfully');
+                } catch (mtlError) {
+                    console.warn('No MTL file found or error loading MTL:', mtlError);
+                }
+                
+                model = await objLoader.loadAsync(url);
+                console.log('OBJ model loaded successfully');
+            } else {
+                // Load GLTF/GLB file
+                console.log('Loading GLTF/GLB file...');
+                const loader = new GLTFLoader();
+                const gltf = await loader.loadAsync(url);
+                model = gltf.scene;
+                console.log('GLTF/GLB model loaded successfully');
+            }
+            
+            if (!model) {
+                throw new Error('Failed to load model');
+            }
+            
+            console.log('Model loaded, setting position and scale');
             model.position.set(position.x, position.y, position.z);
             model.scale.set(scale.x, scale.y, scale.z);
             
+            console.log('Adding model to scene');
             this.scene.add(model);
             this.models.set(name, model);
+            
+            // Log the model's position after adding to scene
+            console.log(`Model added to scene at position: ${model.position.x}, ${model.position.y}, ${model.position.z}`);
+            
+            // Center camera on the model
+            this.centerCameraOnModel(model);
+            
             return model;
         } catch (error) {
             console.error('Error loading model:', error);
-            return null;
+            throw error;
         }
+    }
+    
+    centerCameraOnModel(model) {
+        // Calculate the bounding box of the model
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        
+        // Calculate the distance needed to see the entire model
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const distance = maxDim * 2;
+        
+        // Position the camera
+        this.camera.position.set(
+            center.x + distance,
+            center.y + distance,
+            center.z + distance
+        );
+        
+        // Look at the center of the model
+        this.camera.lookAt(center);
+        
+        // Update controls
+        this.controls.target.copy(center);
+        this.controls.update();
+        
+        console.log(`Camera centered on model at ${center.x}, ${center.y}, ${center.z}`);
     }
 
     setModelPosition(name, x, y, z) {
         const model = this.models.get(name);
         if (model) {
             model.position.set(x, y, z);
+            console.log(`Model ${name} moved to position: ${x}, ${y}, ${z}`);
+        } else {
+            console.warn(`Model ${name} not found`);
         }
     }
 
@@ -103,6 +179,9 @@ class GameEngine {
         const model = this.models.get(name);
         if (model) {
             model.scale.set(x, y, z);
+            console.log(`Model ${name} scaled to: ${x}, ${y}, ${z}`);
+        } else {
+            console.warn(`Model ${name} not found`);
         }
     }
 
@@ -111,6 +190,9 @@ class GameEngine {
         if (model) {
             this.scene.remove(model);
             this.models.delete(name);
+            console.log(`Model ${name} deleted`);
+        } else {
+            console.warn(`Model ${name} not found`);
         }
     }
 

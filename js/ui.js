@@ -22,6 +22,8 @@ async function fetchAvailableModels() {
             option.textContent = model;
             modelSelector.appendChild(option);
         });
+        
+        console.log('Available models loaded:', models);
     } catch (error) {
         console.error('Error fetching models:', error);
         alert('Failed to load available models. Please check the server connection.');
@@ -48,14 +50,26 @@ window.loadModel = async function() {
     }
 
     try {
-        await engine.loadModel(
+        console.log('Attempting to load model:', modelUrl);
+        const model = await engine.loadModel(
             modelUrl,
             name,
             { x: posX, y: posY, z: posZ },
             { x: scaleX, y: scaleY, z: scaleZ }
         );
-        alert('Model loaded successfully!');
+        
+        if (model) {
+            console.log('Model loaded successfully:', model);
+            alert('Model loaded successfully!');
+            
+            // Update the target model field with the loaded model name
+            document.getElementById('target-model').value = name;
+        } else {
+            console.error('Model loaded but returned null');
+            alert('Model loaded but could not be displayed. Check console for details.');
+        }
     } catch (error) {
+        console.error('Error loading model:', error);
         alert('Error loading model: ' + error.message);
     }
 };
@@ -71,8 +85,13 @@ window.moveModel = function() {
         return;
     }
 
-    engine.setModelPosition(name, x, y, z);
-    alert('Model moved successfully!');
+    try {
+        engine.setModelPosition(name, x, y, z);
+        alert('Model moved successfully!');
+    } catch (error) {
+        console.error('Error moving model:', error);
+        alert('Error moving model: ' + error.message);
+    }
 };
 
 window.scaleModel = function() {
@@ -86,8 +105,13 @@ window.scaleModel = function() {
         return;
     }
 
-    engine.setModelScale(name, x, y, z);
-    alert('Model scaled successfully!');
+    try {
+        engine.setModelScale(name, x, y, z);
+        alert('Model scaled successfully!');
+    } catch (error) {
+        console.error('Error scaling model:', error);
+        alert('Error scaling model: ' + error.message);
+    }
 };
 
 window.deleteModel = function() {
@@ -98,8 +122,13 @@ window.deleteModel = function() {
         return;
     }
 
-    engine.deleteModel(name);
-    alert('Model deleted successfully!');
+    try {
+        engine.deleteModel(name);
+        alert('Model deleted successfully!');
+    } catch (error) {
+        console.error('Error deleting model:', error);
+        alert('Error deleting model: ' + error.message);
+    }
 };
 
 window.getPosition = function() {
@@ -110,11 +139,16 @@ window.getPosition = function() {
         return;
     }
 
-    const position = engine.getModelPosition(name);
-    if (position) {
-        document.getElementById('position-display').innerHTML = 
-            `Position: X: ${position.x.toFixed(2)}, Y: ${position.y.toFixed(2)}, Z: ${position.z.toFixed(2)}`;
-    } else {
-        document.getElementById('position-display').innerHTML = 'Model not found';
+    try {
+        const position = engine.getModelPosition(name);
+        if (position) {
+            document.getElementById('position-display').innerHTML = 
+                `Position: X: ${position.x.toFixed(2)}, Y: ${position.y.toFixed(2)}, Z: ${position.z.toFixed(2)}`;
+        } else {
+            document.getElementById('position-display').innerHTML = 'Model not found';
+        }
+    } catch (error) {
+        console.error('Error getting model position:', error);
+        document.getElementById('position-display').innerHTML = 'Error: ' + error.message;
     }
 }; 
