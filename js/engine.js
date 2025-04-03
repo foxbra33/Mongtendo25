@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
 class GameEngine {
     constructor() {
@@ -338,14 +339,16 @@ class GameEngine {
     }
 
     // Model management methods
-    async loadModel(url, name, position = { x: 0, y: 0, z: 0 }, scale = { x: 1, y: 1, z: 1 }) {
+    async loadModel(url, name, position = { x: 0, y: 0, z: 0 }, scale = { x: 1, y: 1, z: 1 }, skipCameraCenter = false) {
         console.log(`Loading model: ${url} with name: ${name}`);
         console.log(`Position: ${position.x}, ${position.y}, ${position.z}`);
         console.log(`Scale: ${scale.x}, ${scale.y}, ${scale.z}`);
+        console.log(`Skip camera centering: ${skipCameraCenter}`);
         
         try {
             let model;
             const fileExtension = url.split('.').pop().toLowerCase();
+            console.log(`File extension: ${fileExtension}`);
             
             if (fileExtension === 'obj') {
                 // Load OBJ file
@@ -354,6 +357,7 @@ class GameEngine {
                 
                 // Check if there's a corresponding MTL file
                 const mtlUrl = url.replace('.obj', '.mtl');
+                console.log(`Looking for MTL file at: ${mtlUrl}`);
                 try {
                     const mtlLoader = new MTLLoader();
                     const materials = await mtlLoader.loadAsync(mtlUrl);
@@ -364,19 +368,41 @@ class GameEngine {
                     console.warn('No MTL file found or error loading MTL:', mtlError);
                 }
                 
-                model = await objLoader.loadAsync(url);
-                console.log('OBJ model loaded successfully');
+                try {
+                    model = await objLoader.loadAsync(url);
+                    console.log('OBJ model loaded successfully');
+                } catch (objError) {
+                    console.error('Error loading OBJ file:', objError);
+                    throw new Error(`Failed to load OBJ file: ${objError.message}`);
+                }
+            } else if (fileExtension === 'fbx') {
+                // Load FBX file
+                console.log('Loading FBX file...');
+                const loader = new FBXLoader();
+                try {
+                    model = await loader.loadAsync(url);
+                    console.log('FBX model loaded successfully');
+                } catch (fbxError) {
+                    console.error('Error loading FBX file:', fbxError);
+                    throw new Error(`Failed to load FBX file: ${fbxError.message}`);
+                }
             } else {
                 // Load GLTF/GLB file
                 console.log('Loading GLTF/GLB file...');
                 const loader = new GLTFLoader();
-                const gltf = await loader.loadAsync(url);
-                model = gltf.scene;
-                console.log('GLTF/GLB model loaded successfully');
+                try {
+                    const gltf = await loader.loadAsync(url);
+                    model = gltf.scene;
+                    console.log('GLTF/GLB model loaded successfully');
+                } catch (gltfError) {
+                    console.error('Error loading GLTF/GLB file:', gltfError);
+                    throw new Error(`Failed to load GLTF/GLB file: ${gltfError.message}`);
+                }
             }
             
             if (!model) {
-                throw new Error('Failed to load model');
+                console.error('Model is null after loading');
+                throw new Error('Failed to load model: Model is null');
             }
             
             console.log('Model loaded, setting position and scale');
@@ -393,8 +419,12 @@ class GameEngine {
             // Log the model's position after adding to scene
             console.log(`Model added to scene at position: ${model.position.x}, ${model.position.y}, ${model.position.z}`);
             
-            // Center camera on the model
-            this.centerCameraOnModel(model);
+            // Center camera on the model only if skipCameraCenter is false
+            if (!skipCameraCenter) {
+                this.centerCameraOnModel(model);
+            } else {
+                console.log('Skipping camera centering as requested');
+            }
             
             // Save scene state after adding model
             this.saveSceneState();

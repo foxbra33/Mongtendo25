@@ -4,7 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Game Engine</title>
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
     <style>
+        :root {
+            /* Light theme variables (default) */
+            --bg-color: #f0f0f0;
+            --panel-bg: white;
+            --text-color: #333;
+            --text-secondary: #666;
+            --border-color: #ddd;
+            --button-bg: #4CAF50;
+            --button-hover: #45a049;
+            --button-disabled: #cccccc;
+            --hierarchy-bg: #f8f8f8;
+            --position-display-bg: #e9e9e9;
+            --shadow-color: rgba(0,0,0,0.1);
+        }
+
+        :root[data-theme="dark"] {
+            /* Dark theme variables */
+            --bg-color: #1e1e1e;
+            --panel-bg: #2d2d2d;
+            --text-color: #e0e0e0;
+            --text-secondary: #b0b0b0;
+            --border-color: #444;
+            --button-bg: #3a8a3d;
+            --button-hover: #2e6e30;
+            --button-disabled: #555;
+            --hierarchy-bg: #363636;
+            --position-display-bg: #363636;
+            --shadow-color: rgba(0,0,0,0.3);
+        }
+
         body {
             margin: 0;
             padding: 0;
@@ -20,45 +51,90 @@
             background-color: #1a1a1a;
         }
         
+        #engine-title {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-family: 'Creepster', cursive;
+            font-size: 28px;
+            color: #00ff00;
+            text-shadow: 
+                -1px -1px 0 #000,  
+                1px -1px 0 #000,
+                -1px 1px 0 #000,
+                1px 1px 0 #000,
+                0 0 10px #00ff00, 
+                0 0 20px #00ff00;
+            z-index: 1000;
+            pointer-events: none;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from {
+                text-shadow: 
+                    -1px -1px 0 #000,  
+                    1px -1px 0 #000,
+                    -1px 1px 0 #000,
+                    1px 1px 0 #000,
+                    0 0 5px #00ff00, 
+                    0 0 10px #00ff00;
+            }
+            to {
+                text-shadow: 
+                    -1px -1px 0 #000,  
+                    1px -1px 0 #000,
+                    -1px 1px 0 #000,
+                    1px 1px 0 #000,
+                    0 0 10px #00ff00, 
+                    0 0 20px #00ff00, 
+                    0 0 30px #00ff00;
+            }
+        }
+        
         #controls-panel {
             width: 300px;
             padding: 20px;
-            background-color: #f0f0f0;
+            background-color: var(--bg-color);
             overflow-y: auto;
+            transition: background-color 0.3s, color 0.3s;
         }
         
         .control-group {
             margin-bottom: 20px;
             padding: 10px;
-            background-color: white;
+            background-color: var(--panel-bg);
             border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px var(--shadow-color);
+            transition: background-color 0.3s, box-shadow 0.3s;
         }
         
         .control-group h3 {
             margin-top: 0;
             margin-bottom: 10px;
-            color: #333;
+            color: var(--text-color);
         }
         
         label {
             display: block;
             margin-bottom: 5px;
-            color: #666;
+            color: var(--text-secondary);
         }
         
         input, select {
             width: 100%;
             padding: 5px;
             margin-bottom: 10px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             border-radius: 3px;
+            background-color: var(--panel-bg);
+            color: var(--text-color);
         }
         
         button {
             width: 100%;
             padding: 8px;
-            background-color: #4CAF50;
+            background-color: var(--button-bg);
             color: white;
             border: none;
             border-radius: 3px;
@@ -67,27 +143,28 @@
         }
         
         button:hover {
-            background-color: #45a049;
+            background-color: var(--button-hover);
         }
         
         button:disabled {
-            background-color: #cccccc;
+            background-color: var(--button-disabled);
             cursor: not-allowed;
         }
         
         #position-display {
             margin-top: 10px;
             padding: 10px;
-            background-color: #e9e9e9;
+            background-color: var(--position-display-bg);
             border-radius: 3px;
+            color: var(--text-color);
         }
         
         #hierarchy-panel {
             margin-top: 20px;
             padding: 10px;
-            background-color: white;
+            background-color: var(--panel-bg);
             border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px var(--shadow-color);
         }
         
         .hierarchy-item {
@@ -95,8 +172,9 @@
             align-items: center;
             padding: 5px;
             margin-bottom: 5px;
-            background-color: #f8f8f8;
+            background-color: var(--hierarchy-bg);
             border-radius: 3px;
+            color: var(--text-color);
         }
         
         .hierarchy-icon {
@@ -116,7 +194,7 @@
         .hierarchy-action-btn {
             padding: 3px 8px;
             font-size: 12px;
-            background-color: #4CAF50;
+            background-color: var(--button-bg);
             color: white;
             border: none;
             border-radius: 3px;
@@ -124,7 +202,7 @@
         }
         
         .hierarchy-action-btn:hover {
-            background-color: #45a049;
+            background-color: var(--button-hover);
         }
         
         .scene-controls {
@@ -148,25 +226,78 @@
         .hierarchy-section-title {
             font-weight: bold;
             margin-bottom: 5px;
-            color: #333;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 3px;
+            color: var(--text-color);
         }
         
-        .spawn-point-controls {
+        .theme-toggle {
             display: flex;
-            gap: 5px;
-            margin-bottom: 10px;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: var(--panel-bg);
+            border-radius: 5px;
+            box-shadow: 0 2px 5px var(--shadow-color);
         }
         
-        .spawn-point-controls button {
-            flex: 1;
-            padding: 5px;
-            font-size: 12px;
+        .theme-toggle-label {
+            margin: 0;
+            color: var(--text-color);
         }
         
-        .spawn-point-item {
-            background-color: #fffde7;
+        .theme-toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .theme-toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .theme-toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .theme-toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .theme-toggle-slider {
+            background-color: var(--button-bg);
+        }
+        
+        input:checked + .theme-toggle-slider:before {
+            transform: translateX(26px);
+        }
+        
+        .theme-toggle-icon {
+            margin-right: 10px;
+            font-size: 16px;
+        }
+        
+        .theme-toggle-container {
+            display: flex;
+            align-items: center;
         }
     </style>
     <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
@@ -180,16 +311,28 @@
     </script>
 </head>
 <body>
-    <div id="engine-container"></div>
+    <div id="engine-container">
+        <div id="engine-title">MONGTENDO ENGINE V1.0</div>
+    </div>
     
     <div id="controls-panel">
+        <div class="theme-toggle">
+            <div class="theme-toggle-container">
+                <span class="theme-toggle-icon">🌙</span>
+                <span class="theme-toggle-label">Dark Mode</span>
+            </div>
+            <label class="theme-toggle-switch">
+                <input type="checkbox" id="theme-toggle">
+                <span class="theme-toggle-slider"></span>
+            </label>
+        </div>
+        
         <div class="control-group">
             <h3>Scene Management</h3>
             <div class="scene-controls">
                 <button onclick="newScene()">New Scene</button>
                 <button onclick="saveScene()">Save Scene</button>
                 <button onclick="document.getElementById('load-scene-input').click()">Load Scene</button>
-                <input type="file" id="load-scene-input" accept=".json">
             </div>
             <label for="scene-name">Scene Name:</label>
             <input type="text" id="scene-name" value="Untitled Scene">
@@ -204,9 +347,9 @@
                 <button id="cancel-spawn-point" style="background-color: #f44336;">Cancel</button>
             </div>
             <div id="spawn-point-info">
-                <p>Click "Create Spawn Point" to add a spawn point to the scene.</p>
-                <p>Use the mouse wheel to adjust height.</p>
-                <p>Click on a spawn point to select it.</p>
+                <p style="color: var(--text-secondary);">Click "Create Spawn Point" to add a spawn point to the scene.</p>
+                <p style="color: var(--text-secondary);">Use the mouse wheel to adjust height.</p>
+                <p style="color: var(--text-secondary);">Click on a spawn point to select it.</p>
             </div>
         </div>
         
@@ -229,6 +372,13 @@
             <input type="number" id="scale-x" placeholder="X" value="1" step="0.1">
             <input type="number" id="scale-y" placeholder="Y" value="1" step="0.1">
             <input type="number" id="scale-z" placeholder="Z" value="1" step="0.1">
+            
+            <div style="margin-bottom: 10px;">
+                <label for="center-camera-checkbox" style="display: inline-flex; align-items: center;">
+                    <input type="checkbox" id="center-camera-checkbox" style="margin-right: 5px;">
+                    <span>Center camera on model</span>
+                </label>
+            </div>
             
             <button onclick="loadModel()">Load Model</button>
         </div>

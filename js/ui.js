@@ -1,29 +1,85 @@
 import engine from './engine.js';
 
+// Theme management
+function initTheme() {
+    const themeToggle = document.getElementById('theme-toggle');
+    const themeIcon = document.querySelector('.theme-toggle-icon');
+    const themeLabel = document.querySelector('.theme-toggle-label');
+    
+    // Check for saved theme preference or use system preference
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        themeToggle.checked = true;
+        themeIcon.textContent = '☀️';
+        themeLabel.textContent = 'Light Mode';
+    } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+        themeToggle.checked = false;
+        themeIcon.textContent = '🌙';
+        themeLabel.textContent = 'Dark Mode';
+    }
+    
+    // Add event listener for theme toggle
+    themeToggle.addEventListener('change', () => {
+        if (themeToggle.checked) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            localStorage.setItem('theme', 'dark');
+            themeIcon.textContent = '☀️';
+            themeLabel.textContent = 'Light Mode';
+        } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+            localStorage.setItem('theme', 'light');
+            themeIcon.textContent = '🌙';
+            themeLabel.textContent = 'Dark Mode';
+        }
+    });
+}
+
 // Fetch available models from the server
 async function fetchAvailableModels() {
     try {
+        console.log('Fetching available models from server...');
         const response = await fetch('/api/models');
+        console.log('Server response status:', response.status);
+        
         if (!response.ok) {
-            throw new Error('Failed to fetch models');
+            throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
         }
+        
         const models = await response.json();
+        console.log('Models received from server:', models);
         
         const modelSelector = document.getElementById('model-selector');
+        if (!modelSelector) {
+            console.error('Model selector element not found in the DOM');
+            return;
+        }
+        
         // Clear existing options except the first one
         while (modelSelector.options.length > 1) {
             modelSelector.remove(1);
         }
         
         // Add models to the dropdown
-        models.forEach(model => {
+        if (models && models.length > 0) {
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = `/Assets/${model}`;
+                option.textContent = model;
+                modelSelector.appendChild(option);
+            });
+            console.log('Available models loaded into dropdown:', models);
+        } else {
+            console.warn('No models found in the response');
             const option = document.createElement('option');
-            option.value = `/Assets/${model}`;
-            option.textContent = model;
+            option.value = "";
+            option.textContent = "No models available";
+            option.disabled = true;
             modelSelector.appendChild(option);
-        });
-        
-        console.log('Available models loaded:', models);
+        }
     } catch (error) {
         console.error('Error fetching models:', error);
         alert('Failed to load available models. Please check the server connection.');
@@ -97,6 +153,7 @@ function updateProjectHierarchy() {
 
 // Call this function when the page loads
 document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
     fetchAvailableModels();
     updateProjectHierarchy();
     
@@ -145,6 +202,21 @@ document.addEventListener('DOMContentLoaded', () => {
         engine.cancelPlacingSpawnPoint();
         updateSpawnPointButtons();
     });
+    
+    // Add camera centering checkbox to the model loading section
+    const modelControls = document.querySelector('.control-group:nth-child(4)');
+    const checkboxContainer = document.createElement('div');
+    checkboxContainer.style.marginBottom = '10px';
+    checkboxContainer.innerHTML = `
+        <label style="display: flex; align-items: center; margin-bottom: 10px;">
+            <input type="checkbox" id="center-camera-checkbox" checked style="width: auto; margin-right: 8px;">
+            <span style="color: var(--text-secondary);">Center camera on model</span>
+        </label>
+    `;
+    
+    // Insert the checkbox before the Load Model button
+    const loadButton = modelControls.querySelector('button[onclick="loadModel()"]');
+    modelControls.insertBefore(checkboxContainer, loadButton);
 });
 
 // Update spawn point buttons based on current state
@@ -182,9 +254,25 @@ window.loadModel = async function() {
     const scaleX = parseFloat(document.getElementById('scale-x').value) || 1;
     const scaleY = parseFloat(document.getElementById('scale-y').value) || 1;
     const scaleZ = parseFloat(document.getElementById('scale-z').value) || 1;
+    const centerCamera = document.getElementById('center-camera-checkbox')?.checked ?? false;
 
-    if (!modelUrl || !name) {
-        alert('Please select a model and provide a name');
+    console.log('Loading model with parameters:', {
+        modelUrl,
+        name,
+        position: { x: posX, y: posY, z: posZ },
+        scale: { x: scaleX, y: scaleY, z: scaleZ },
+        centerCamera
+    });
+
+    if (!modelUrl) {
+        console.error('No model URL selected');
+        alert('Please select a model from the dropdown');
+        return;
+    }
+
+    if (!name) {
+        console.error('No model name provided');
+        alert('Please provide a name for the model');
         return;
     }
 
@@ -194,7 +282,8 @@ window.loadModel = async function() {
             modelUrl,
             name,
             { x: posX, y: posY, z: posZ },
-            { x: scaleX, y: scaleY, z: scaleZ }
+            { x: scaleX, y: scaleY, z: scaleZ },
+            !centerCamera // Skip camera centering if checkbox is unchecked
         );
         
         if (model) {
@@ -212,7 +301,7 @@ window.loadModel = async function() {
         }
     } catch (error) {
         console.error('Error loading model:', error);
-        alert('Error loading model: ' + error.message);
+        alert('Failed to load model: ' + error.message);
     }
 };
 
