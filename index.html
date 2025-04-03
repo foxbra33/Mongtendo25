@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Game Engine</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #toolbar {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 5px;
+            color: white;
+            font-family: Arial, sans-serif;
+            width: 300px;
+        }
+        .tool-section {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: rgba(255,255,255,0.1);
+            border-radius: 5px;
+        }
+        .tool-section h3 {
+            margin: 0 0 10px 0;
+            color: #4CAF50;
+        }
+        input, button, select {
+            margin: 5px 0;
+            padding: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .input-group {
+            display: flex;
+            gap: 5px;
+            margin: 5px 0;
+        }
+        .input-group input {
+            flex: 1;
+        }
+        #position-display {
+            margin-top: 10px;
+            padding: 5px;
+            background-color: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        select {
+            background-color: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 3px;
+        }
+        select option {
+            background-color: #333;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>Controls:</h3>
+        <p>WASD - Move camera</p>
+        <p>Mouse - Look around</p>
+        <p>Q/E - Move up/down</p>
+        <p>R - Reset camera</p>
+    </div>
+    <div id="toolbar">
+        <div class="tool-section">
+            <h3>Load Model</h3>
+            <select id="model-selector">
+                <option value="">Select a model from Assets folder</option>
+            </select>
+            <input type="text" id="model-name" placeholder="Model Name">
+            <div class="input-group">
+                <input type="number" id="pos-x" placeholder="X" value="0">
+                <input type="number" id="pos-y" placeholder="Y" value="0">
+                <input type="number" id="pos-z" placeholder="Z" value="0">
+            </div>
+            <div class="input-group">
+                <input type="number" id="scale-x" placeholder="Scale X" value="1">
+                <input type="number" id="scale-y" placeholder="Scale Y" value="1">
+                <input type="number" id="scale-z" placeholder="Scale Z" value="1">
+            </div>
+            <button onclick="loadModel()">Load Model</button>
+        </div>
+
+        <div class="tool-section">
+            <h3>Model Controls</h3>
+            <input type="text" id="target-model" placeholder="Model Name">
+            <div class="input-group">
+                <input type="number" id="move-x" placeholder="Move X">
+                <input type="number" id="move-y" placeholder="Move Y">
+                <input type="number" id="move-z" placeholder="Move Z">
+            </div>
+            <button onclick="moveModel()">Move Model</button>
+            
+            <div class="input-group">
+                <input type="number" id="new-scale-x" placeholder="Scale X">
+                <input type="number" id="new-scale-y" placeholder="Scale Y">
+                <input type="number" id="new-scale-z" placeholder="Scale Z">
+            </div>
+            <button onclick="scaleModel()">Scale Model</button>
+            
+            <button onclick="deleteModel()">Delete Model</button>
+            <button onclick="getPosition()">Get Position</button>
+            <div id="position-display"></div>
+        </div>
+    </div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module" src="js/engine.js"></script>
+    <script type="module" src="js/ui.js"></script>
+</body>
+</html> 
