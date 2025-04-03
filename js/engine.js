@@ -37,6 +37,13 @@ class GameEngine {
             transparent: true,
             opacity: 0.8
         });
+        this.pulseTime = 0;
+        this.pulseSpeed = 2; // Speed of the pulse animation
+
+        // Bind event handlers to maintain 'this' context
+        this.onMouseMove = this.onMouseMove.bind(this);
+        this.onMouseClick = this.onMouseClick.bind(this);
+        this.onMouseWheel = this.onMouseWheel.bind(this);
 
         // Wait for DOM to be ready
         if (document.readyState === 'loading') {
@@ -99,9 +106,10 @@ class GameEngine {
         this.scene.add(this.originMarker);
         
         // Add mouse event listeners for spawn point placement
-        this.renderer.domElement.addEventListener('mousemove', (event) => this.onMouseMove(event));
-        this.renderer.domElement.addEventListener('click', (event) => this.onMouseClick(event));
-        this.renderer.domElement.addEventListener('wheel', (event) => this.onMouseWheel(event));
+        const rendererElement = this.renderer.domElement;
+        rendererElement.addEventListener('mousemove', (event) => this.onMouseMove(event));
+        rendererElement.addEventListener('click', (event) => this.onMouseClick(event));
+        rendererElement.addEventListener('wheel', (event) => this.onMouseWheel(event));
         
         // Handle window resize
         window.addEventListener('resize', () => {
@@ -129,9 +137,12 @@ class GameEngine {
             this.controls.update();
         }
         
-        // Update spawn point glow effect
+        // Update pulse animation for spawn points
+        this.pulseTime += 0.016 * this.pulseSpeed; // Assuming 60fps
         if (this.isPlacingSpawnPoint && this.selectedSpawnPoint) {
-            this.selectedSpawnPoint.material.opacity = 0.5 + Math.sin(Date.now() * 0.005) * 0.3;
+            const pulse = Math.sin(this.pulseTime) * 0.3 + 0.7; // Oscillate between 0.4 and 1.0
+            this.selectedSpawnPoint.material.opacity = pulse;
+            this.selectedSpawnPoint.scale.set(pulse, pulse, 1);
         }
         
         this.renderer.render(this.scene, this.camera);
@@ -550,10 +561,17 @@ class GameEngine {
         this.isMovingSpawnPoint = false;
         this.selectedSpawnPoint = null;
         
-        // Create a new spawn point mesh
+        // Create a new spawn point mesh with pulsing material
         const spawnPoint = new THREE.Mesh(this.spawnPointGeometry, this.spawnPointGlowMaterial.clone());
         spawnPoint.rotation.x = -Math.PI / 2; // Rotate to lie flat on the ground
         spawnPoint.position.y = 0.01; // Slightly above the ground to prevent z-fighting
+        
+        // Make sure the spawn point is visible
+        spawnPoint.visible = true;
+        spawnPoint.material.visible = true;
+        spawnPoint.material.opacity = 0.8;
+        spawnPoint.material.transparent = true;
+        spawnPoint.material.depthWrite = false; // Prevent z-fighting
         
         this.scene.add(spawnPoint);
         this.selectedSpawnPoint = spawnPoint;
@@ -580,8 +598,10 @@ class GameEngine {
     placeSpawnPoint() {
         if (!this.selectedSpawnPoint || !this.isPlacingSpawnPoint) return;
         
-        // Change material to static
+        // Change material to static and reset scale
         this.selectedSpawnPoint.material = this.spawnPointMaterial.clone();
+        this.selectedSpawnPoint.scale.set(1, 1, 1);
+        this.selectedSpawnPoint.material.opacity = 0.8;
         
         // Add to spawn points array
         this.spawnPoints.push(this.selectedSpawnPoint);
@@ -625,11 +645,20 @@ class GameEngine {
             const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
             const intersectionPoint = new THREE.Vector3();
             
-            this.raycaster.ray.intersectPlane(groundPlane, intersectionPoint);
-            
-            if (intersectionPoint) {
+            if (this.raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) {
+                // Update spawn point position
                 this.selectedSpawnPoint.position.x = intersectionPoint.x;
                 this.selectedSpawnPoint.position.z = intersectionPoint.z;
+                // Keep y position slightly above ground to prevent z-fighting
+                this.selectedSpawnPoint.position.y = 0.01;
+                
+                // Make sure the spawn point is visible
+                this.selectedSpawnPoint.visible = true;
+                this.selectedSpawnPoint.material.visible = true;
+                this.selectedSpawnPoint.material.opacity = 0.8;
+                
+                // Log the position for debugging
+                console.log('Spawn point position:', this.selectedSpawnPoint.position);
             }
         }
     }

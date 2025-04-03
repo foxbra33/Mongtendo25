@@ -151,98 +151,106 @@ function updateProjectHierarchy() {
     }
 }
 
-// Call this function when the page loads
-document.addEventListener('DOMContentLoaded', () => {
+// Initialize UI when DOM is loaded
+document.addEventListener('DOMContentLoaded', async () => {
+    // Initialize theme
     initTheme();
-    fetchAvailableModels();
-    updateProjectHierarchy();
+    
+    // Fetch available models
+    await fetchAvailableModels();
     
     // Set up scene name input
     const sceneNameInput = document.getElementById('scene-name');
-    sceneNameInput.value = engine.currentSceneName;
-    sceneNameInput.addEventListener('change', () => {
-        engine.setSceneName(sceneNameInput.value);
-    });
+    if (sceneNameInput) {
+        sceneNameInput.value = engine.currentSceneName;
+        sceneNameInput.addEventListener('change', () => {
+            engine.setSceneName(sceneNameInput.value);
+        });
+    }
     
     // Set up file input for loading scenes
     const loadSceneInput = document.getElementById('load-scene-input');
-    loadSceneInput.addEventListener('change', async (event) => {
-        if (event.target.files.length > 0) {
-            try {
-                await engine.loadSceneFromFile(event.target.files[0]);
-                updateProjectHierarchy();
-                document.getElementById('scene-name').value = engine.currentSceneName;
-                alert('Scene loaded successfully!');
-            } catch (error) {
-                alert('Error loading scene: ' + error.message);
+    if (loadSceneInput) {
+        loadSceneInput.addEventListener('change', async (event) => {
+            if (event.target.files.length > 0) {
+                try {
+                    await engine.loadSceneFromFile(event.target.files[0]);
+                    updateProjectHierarchy();
+                    document.getElementById('scene-name').value = engine.currentSceneName;
+                    alert('Scene loaded successfully!');
+                } catch (error) {
+                    alert('Error loading scene: ' + error.message);
+                }
+                // Reset the input
+                event.target.value = '';
             }
-            // Reset the input
-            event.target.value = '';
+        });
+    }
+    
+    // Update spawn point buttons based on current state
+    function updateSpawnPointButtons() {
+        const createBtn = document.getElementById('create-spawn-point');
+        const moveBtn = document.getElementById('move-spawn-point');
+        const deleteBtn = document.getElementById('delete-spawn-point');
+        const cancelBtn = document.getElementById('cancel-spawn-point');
+        
+        if (!createBtn || !moveBtn || !deleteBtn || !cancelBtn) {
+            console.warn('Some spawn point buttons are not found in the DOM');
+            return;
         }
-    });
+        
+        if (engine.isPlacingSpawnPoint) {
+            createBtn.disabled = true;
+            moveBtn.disabled = true;
+            deleteBtn.disabled = true;
+            cancelBtn.disabled = false;
+        } else if (engine.isMovingSpawnPoint) {
+            createBtn.disabled = true;
+            moveBtn.disabled = true;
+            deleteBtn.disabled = false;
+            cancelBtn.disabled = false;
+        } else {
+            createBtn.disabled = false;
+            moveBtn.disabled = false;
+            deleteBtn.disabled = false;
+            cancelBtn.disabled = true;
+        }
+    }
     
     // Set up spawn point buttons
-    document.getElementById('create-spawn-point').addEventListener('click', () => {
-        engine.startPlacingSpawnPoint();
-        updateSpawnPointButtons();
-    });
-    
-    document.getElementById('move-spawn-point').addEventListener('click', () => {
-        engine.startMovingSpawnPoint();
-        updateSpawnPointButtons();
-    });
-    
-    document.getElementById('delete-spawn-point').addEventListener('click', () => {
-        engine.deleteSelectedSpawnPoint();
-        updateProjectHierarchy();
-        updateSpawnPointButtons();
-    });
-    
-    document.getElementById('cancel-spawn-point').addEventListener('click', () => {
-        engine.cancelPlacingSpawnPoint();
-        updateSpawnPointButtons();
-    });
-    
-    // Add camera centering checkbox to the model loading section
-    const modelControls = document.querySelector('.control-group:nth-child(4)');
-    const checkboxContainer = document.createElement('div');
-    checkboxContainer.style.marginBottom = '10px';
-    checkboxContainer.innerHTML = `
-        <label style="display: flex; align-items: center; margin-bottom: 10px;">
-            <input type="checkbox" id="center-camera-checkbox" checked style="width: auto; margin-right: 8px;">
-            <span style="color: var(--text-secondary);">Center camera on model</span>
-        </label>
-    `;
-    
-    // Insert the checkbox before the Load Model button
-    const loadButton = modelControls.querySelector('button[onclick="loadModel()"]');
-    modelControls.insertBefore(checkboxContainer, loadButton);
-});
-
-// Update spawn point buttons based on current state
-function updateSpawnPointButtons() {
     const createBtn = document.getElementById('create-spawn-point');
     const moveBtn = document.getElementById('move-spawn-point');
     const deleteBtn = document.getElementById('delete-spawn-point');
     const cancelBtn = document.getElementById('cancel-spawn-point');
     
-    if (engine.isPlacingSpawnPoint) {
-        createBtn.disabled = true;
-        moveBtn.disabled = true;
-        deleteBtn.disabled = true;
-        cancelBtn.disabled = false;
-    } else if (engine.isMovingSpawnPoint) {
-        createBtn.disabled = true;
-        moveBtn.disabled = true;
-        deleteBtn.disabled = false;
-        cancelBtn.disabled = false;
+    if (createBtn && moveBtn && deleteBtn && cancelBtn) {
+        createBtn.addEventListener('click', () => {
+            engine.startPlacingSpawnPoint();
+            updateSpawnPointButtons();
+        });
+        
+        moveBtn.addEventListener('click', () => {
+            engine.startMovingSpawnPoint();
+            updateSpawnPointButtons();
+        });
+        
+        deleteBtn.addEventListener('click', () => {
+            engine.deleteSelectedSpawnPoint();
+            updateProjectHierarchy();
+            updateSpawnPointButtons();
+        });
+        
+        cancelBtn.addEventListener('click', () => {
+            engine.cancelPlacingSpawnPoint();
+            updateSpawnPointButtons();
+        });
+        
+        // Initial update of spawn point buttons
+        updateSpawnPointButtons();
     } else {
-        createBtn.disabled = false;
-        moveBtn.disabled = engine.getSpawnPoints().length === 0;
-        deleteBtn.disabled = !engine.selectedSpawnPoint;
-        cancelBtn.disabled = true;
+        console.warn('Some spawn point buttons are not found in the DOM');
     }
-}
+});
 
 // Make functions available globally
 window.loadModel = async function() {
