@@ -109,6 +109,9 @@ class FirstPersonControls {
             // Create a bounding box for the mesh
             const boundingBox = new THREE.Box3().setFromObject(mesh);
             
+            // Add a small buffer to prevent getting stuck on edges
+            boundingBox.expandByScalar(-0.1);
+            
             // Check if the player sphere intersects with the bounding box
             if (boundingBox.intersectsSphere(playerSphere)) {
                 return true;
@@ -131,48 +134,55 @@ class FirstPersonControls {
         const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
         const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
         
+        // Calculate movement vector
+        const movement = new THREE.Vector3();
+        
         // Apply movement in the direction the camera is facing
         if (this.moveForward || this.moveBackward) {
-            // Forward/backward movement along camera direction
-            newPosition.addScaledVector(
+            movement.addScaledVector(
                 forward, 
                 (this.moveForward ? 1 : -1) * this.moveSpeed * delta
             );
         }
         
         if (this.moveLeft || this.moveRight) {
-            // Left/right movement perpendicular to camera direction
-            newPosition.addScaledVector(
+            movement.addScaledVector(
                 right, 
                 (this.moveRight ? 1 : -1) * this.moveSpeed * delta
             );
         }
         
         // Apply vertical movement (jumping/falling)
-        newPosition.y += this.velocity.y * delta;
+        movement.y = this.velocity.y * delta;
+        
+        // Add movement to current position
+        newPosition.add(movement);
         
         // Check for collisions before applying movement
         if (!this.checkCollisions(newPosition)) {
             // No collision, update position
             this.camera.position.copy(newPosition);
         } else {
-            // Collision detected, try to move only in the X or Z direction
-            // This allows sliding along walls
+            // Collision detected, try to slide along the surface
+            const slidePosition = this.camera.position.clone();
             
-            // Try X movement only
-            const xOnlyPosition = this.camera.position.clone();
-            xOnlyPosition.x = newPosition.x;
-            
-            if (!this.checkCollisions(xOnlyPosition)) {
+            // Try to move in X direction
+            slidePosition.x = newPosition.x;
+            if (!this.checkCollisions(slidePosition)) {
                 this.camera.position.x = newPosition.x;
             }
             
-            // Try Z movement only
-            const zOnlyPosition = this.camera.position.clone();
-            zOnlyPosition.z = newPosition.z;
-            
-            if (!this.checkCollisions(zOnlyPosition)) {
+            // Try to move in Z direction
+            slidePosition.z = newPosition.z;
+            if (!this.checkCollisions(slidePosition)) {
                 this.camera.position.z = newPosition.z;
+            }
+            
+            // Only update Y position if we're not colliding
+            const yOnlyPosition = this.camera.position.clone();
+            yOnlyPosition.y = newPosition.y;
+            if (!this.checkCollisions(yOnlyPosition)) {
+                this.camera.position.y = newPosition.y;
             }
         }
         
@@ -183,17 +193,20 @@ class FirstPersonControls {
             this.canJump = true;
         }
     }
-
+    
+    // Set player position
+    setPosition(position) {
+        this.camera.position.copy(position);
+    }
+    
+    // Lock pointer
     lock() {
         this.controls.lock();
     }
-
+    
+    // Unlock pointer
     unlock() {
         this.controls.unlock();
-    }
-
-    setPosition(position) {
-        this.camera.position.copy(position);
     }
 }
 

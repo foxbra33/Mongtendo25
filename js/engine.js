@@ -6,6 +6,7 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import BackgroundEffects from './backgroundEffects.js';
 import FirstPersonControls from './firstPersonControls.js';
+import BulletSystem from './bulletSystem.js';
 
 class GameEngine {
     constructor() {
@@ -52,6 +53,14 @@ class GameEngine {
         this.modelOriginalScale = new THREE.Vector3();
         this.modelMoveSpeed = 0.2; // Increased from 0.1 to 0.2 (2x faster)
         this.collisionMeshes = new Map(); // Store collision meshes for models
+        this.originalMaterials = new Map(); // Store original materials for models
+        this.isCollisionMeshVisible = false; // Track if collision mesh is visible
+
+        // Crosshair element
+        this.crosshair = null;
+        
+        // Bullet system
+        this.bulletSystem = null;
 
         // Bind event handlers to maintain 'this' context
         this.onMouseMove = this.onMouseMove.bind(this);
@@ -122,6 +131,16 @@ class GameEngine {
         
         // Hide exit play mode button
         document.getElementById('exit-play-mode').style.display = 'none';
+        
+        // Restore renderer size
+        this.renderer.setSize(window.innerWidth - 300, window.innerHeight);
+        this.camera.aspect = (window.innerWidth - 300) / window.innerHeight;
+        this.camera.updateProjectionMatrix();
+        
+        // Hide crosshair
+        if (this.crosshair) {
+            this.crosshair.style.display = 'none';
+        }
     }
 
     switchToPlayMode() {
@@ -198,7 +217,6 @@ class GameEngine {
         
         // Enable first-person controls
         this.firstPersonControls.init();
-        this.firstPersonControls.lock();
         
         // Set player position to the selected spawn point
         this.firstPersonControls.setPosition(spawnPoint.position);
@@ -206,6 +224,21 @@ class GameEngine {
         // Pass collision meshes to first-person controls
         const collisionMeshesArray = Array.from(this.collisionMeshes.values());
         this.firstPersonControls.setCollisionMeshes(collisionMeshesArray);
+        
+        // Make the renderer full screen
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.camera.aspect = window.innerWidth / window.innerHeight;
+        this.camera.updateProjectionMatrix();
+        
+        // Show crosshair
+        if (this.crosshair) {
+            this.crosshair.style.display = 'block';
+        }
+        
+        // Lock pointer after a short delay to ensure everything is initialized
+        setTimeout(() => {
+            this.firstPersonControls.controls.lock();
+        }, 100);
         
         console.log('Switched to play mode');
     }
@@ -243,7 +276,7 @@ class GameEngine {
         this.scene.add(ambientLight);
         
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(5, 5, 5);
+        directionalLight.position.set(5, 10, 7.5);
         this.scene.add(directionalLight);
         console.log('Lights added');
         
@@ -262,6 +295,12 @@ class GameEngine {
         this.originMarker = new THREE.Mesh(geometry, material);
         this.scene.add(this.originMarker);
         
+        // Create crosshair element
+        this.createCrosshair();
+        
+        // Initialize bullet system
+        this.bulletSystem = new BulletSystem(this.scene);
+        
         // Add mouse event listeners for spawn point placement
         const rendererElement = this.renderer.domElement;
         rendererElement.addEventListener('mousemove', (event) => this.onMouseMove(event));
@@ -273,13 +312,24 @@ class GameEngine {
         
         // Handle window resize
         window.addEventListener('resize', () => {
-            const width = window.innerWidth - 300;
-            const height = window.innerHeight;
-            
-            this.camera.aspect = width / height;
-            this.camera.updateProjectionMatrix();
-            
-            this.renderer.setSize(width, height);
+            if (this.currentMode === 'edit') {
+                const width = window.innerWidth - 300;
+                const height = window.innerHeight;
+                
+                this.camera.aspect = width / height;
+                this.camera.updateProjectionMatrix();
+                
+                this.renderer.setSize(width, height);
+            } else {
+                // In play mode, use full window size
+                const width = window.innerWidth;
+                const height = window.innerHeight;
+                
+                this.camera.aspect = width / height;
+                this.camera.updateProjectionMatrix();
+                
+                this.renderer.setSize(width, height);
+            }
         });
         
         // Start animation loop
@@ -299,6 +349,11 @@ class GameEngine {
             this.controls.update();
         } else {
             this.firstPersonControls.update(delta);
+            
+            // Update bullet system in play mode
+            if (this.bulletSystem) {
+                this.bulletSystem.update(delta);
+            }
         }
         
         this.backgroundEffects.update();
@@ -798,6 +853,14 @@ class GameEngine {
         // Save scene state
         this.saveSceneState();
         
+        // Update UI
+        if (typeof updateProjectHierarchy === 'function') {
+            updateProjectHierarchy();
+        }
+        if (typeof updateSpawnPointButtons === 'function') {
+            updateSpawnPointButtons();
+        }
+        
         console.log('Spawn point placed');
     }
     
@@ -812,6 +875,28 @@ class GameEngine {
         this.renderer.domElement.style.cursor = 'move';
         
         console.log('Started moving spawn point mode');
+    }
+
+    finalizeSpawnPointMovement() {
+        if (!this.selectedSpawnPoint || !this.isMovingSpawnPoint) return;
+
+        // Save scene state
+        this.saveSceneState();
+        
+        // Reset state
+        this.isMovingSpawnPoint = false;
+        this.selectedSpawnPoint = null;
+        this.renderer.domElement.style.cursor = 'auto';
+        
+        // Update UI
+        if (typeof updateProjectHierarchy === 'function') {
+            updateProjectHierarchy();
+        }
+        if (typeof updateSpawnPointButtons === 'function') {
+            updateSpawnPointButtons();
+        }
+        
+        console.log('Spawn point movement finalized');
     }
     
     onMouseMove(event) {
@@ -848,6 +933,13 @@ class GameEngine {
     }
     
     onMouseClick(event) {
+        // If in play mode and left mouse button is clicked, shoot a bullet
+        if (this.currentMode === 'play' && event.button === 0) {
+            if (this.bulletSystem) {
+                this.bulletSystem.shoot(this.camera);
+            }
+        }
+        
         // Calculate mouse position in normalized device coordinates
         const rect = this.renderer.domElement.getBoundingClientRect();
         this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -895,18 +987,18 @@ class GameEngine {
             // Place the spawn point
             this.placeSpawnPoint();
         }
-        // If moving a spawn point, check for spawn point selection
+        // If moving a spawn point, handle the click
         else if (this.isMovingSpawnPoint) {
-            // Check if we clicked on a spawn point
-            const intersects = this.raycaster.intersectObjects(this.spawnPoints);
-            
-            if (intersects.length > 0) {
-                // Select the spawn point
-                this.selectedSpawnPoint = intersects[0].object;
-                console.log('Selected spawn point for moving');
+            if (this.selectedSpawnPoint) {
+                // If we already have a selected spawn point, finalize its movement
+                this.finalizeSpawnPointMovement();
             } else {
-                // Deselect if we clicked elsewhere
-                this.selectedSpawnPoint = null;
+                // If no spawn point is selected, try to select one
+                const intersects = this.raycaster.intersectObjects(this.spawnPoints);
+                if (intersects.length > 0) {
+                    this.selectedSpawnPoint = intersects[0].object;
+                    console.log('Selected spawn point for moving');
+                }
             }
         }
         // Otherwise, check for spawn point selection
@@ -983,6 +1075,7 @@ class GameEngine {
         const modelPosY = document.getElementById('model-pos-y');
         const modelPosZ = document.getElementById('model-pos-z');
         const createCollisionMeshBtn = document.getElementById('create-collision-mesh');
+        const toggleCollisionMeshBtn = document.getElementById('toggle-collision-mesh');
         
         selectModelBtn.addEventListener('click', () => {
             if (!this.isEditingModel) {
@@ -1049,6 +1142,13 @@ class GameEngine {
         createCollisionMeshBtn.addEventListener('click', () => {
             if (this.selectedModel) {
                 this.createCollisionMesh(this.selectedModel);
+            }
+        });
+        
+        // Add event listener for toggle collision mesh button
+        toggleCollisionMeshBtn.addEventListener('click', () => {
+            if (this.selectedModel) {
+                this.toggleCollisionMeshVisibility();
             }
         });
         
@@ -1140,9 +1240,14 @@ class GameEngine {
     
     startModelEditing() {
         this.isEditingModel = true;
-        document.getElementById('select-model').textContent = 'Selecting...';
-        document.getElementById('select-model').disabled = true;
-        document.getElementById('cancel-model-edit').disabled = false;
+        const selectBtn = document.getElementById('select-model');
+        const cancelBtn = document.getElementById('cancel-model-edit');
+        
+        selectBtn.textContent = 'Selecting...';
+        selectBtn.disabled = true;
+        selectBtn.classList.add('active');
+        cancelBtn.disabled = false;
+        
         document.getElementById('model-edit-info').style.display = 'block';
         document.getElementById('selected-model-info').style.display = 'none';
         
@@ -1154,17 +1259,61 @@ class GameEngine {
     
     cancelModelEditing() {
         this.isEditingModel = false;
-        document.getElementById('select-model').textContent = 'Select Model';
-        document.getElementById('select-model').disabled = false;
-        document.getElementById('cancel-model-edit').disabled = true;
+        const selectBtn = document.getElementById('select-model');
+        const cancelBtn = document.getElementById('cancel-model-edit');
+        
+        selectBtn.textContent = 'Select Model';
+        selectBtn.disabled = false;
+        selectBtn.classList.remove('active');
+        cancelBtn.disabled = true;
+        
         document.getElementById('model-edit-info').style.display = 'block';
         document.getElementById('selected-model-info').style.display = 'none';
         
         // Remove outline if a model was selected
         if (this.selectedModel) {
+            // Reset collision mesh visibility if it was visible
+            if (this.isCollisionMeshVisible) {
+                const modelName = this.getModelName(this.selectedModel);
+                const collisionMesh = this.collisionMeshes.get(modelName);
+                
+                if (collisionMesh) {
+                    // Hide collision mesh
+                    collisionMesh.traverse((child) => {
+                        if (child.isMesh) {
+                            child.material = new THREE.MeshBasicMaterial({
+                                visible: false,
+                                transparent: true,
+                                opacity: 0
+                            });
+                        }
+                    });
+                    
+                    // Show original model with original materials
+                    this.selectedModel.traverse((child) => {
+                        if (child.isMesh) {
+                            child.visible = true;
+                        }
+                    });
+                    
+                    // Restore original materials
+                    if (this.originalMaterials.has(modelName)) {
+                        this.originalMaterials.get(modelName).forEach(item => {
+                            item.mesh.material = item.material;
+                        });
+                    }
+                }
+                
+                this.isCollisionMeshVisible = false;
+            }
+            
             this.removeModelOutline();
             this.selectedModel = null;
         }
+        
+        // Hide the toggle button
+        const toggleButton = document.getElementById('toggle-collision-mesh');
+        toggleButton.style.display = 'none';
         
         // Change cursor style
         this.renderer.domElement.style.cursor = 'auto';
@@ -1173,33 +1322,51 @@ class GameEngine {
     }
     
     selectModel(model) {
-        if (this.selectedModel === model) return;
-        
         // Remove outline from previously selected model
-        if (this.selectedModel) {
-            this.removeModelOutline();
-        }
+        this.removeModelOutline();
         
+        // Set the selected model
         this.selectedModel = model;
         
         // Create outline for the selected model
         this.createModelOutline(model);
         
-        // Store original scale
-        this.modelOriginalScale.copy(model.scale);
+        // Update the selected model name in the UI
+        const modelName = this.getModelName(model);
+        document.getElementById('selected-model-name').textContent = modelName;
         
-        // Update UI
-        document.getElementById('selected-model-name').textContent = this.getModelName(model);
-        document.getElementById('model-scale-slider').value = '1';
-        document.getElementById('model-scale-value').textContent = '1';
+        // Show the selected model info panel
+        document.getElementById('model-edit-info').style.display = 'none';
+        document.getElementById('selected-model-info').style.display = 'block';
+        
+        // Update the scale slider value
+        const scale = Math.max(model.scale.x, model.scale.y, model.scale.z);
+        document.getElementById('model-scale-slider').value = scale;
+        document.getElementById('model-scale-value').textContent = scale.toFixed(1);
+        
+        // Store the original scale
+        this.modelOriginalScale.copy(model.scale);
         
         // Update position inputs
         this.updatePositionInputs();
         
-        document.getElementById('model-edit-info').style.display = 'none';
-        document.getElementById('selected-model-info').style.display = 'block';
+        // Check if a collision mesh exists for this model
+        const toggleButton = document.getElementById('toggle-collision-mesh');
+        if (this.collisionMeshes.has(modelName)) {
+            toggleButton.style.display = 'block';
+            toggleButton.textContent = this.isCollisionMeshVisible ? 'Hide Collision Mesh' : 'Show Collision Mesh';
+            toggleButton.classList.toggle('active', this.isCollisionMeshVisible);
+        } else {
+            toggleButton.style.display = 'none';
+        }
         
-        console.log(`Selected model: ${this.getModelName(model)}`);
+        // Update select button state
+        const selectBtn = document.getElementById('select-model');
+        selectBtn.textContent = 'Select Model';
+        selectBtn.disabled = false;
+        selectBtn.classList.remove('active');
+        
+        console.log(`Selected model: ${modelName}`);
     }
     
     getModelName(model) {
@@ -1273,6 +1440,17 @@ class GameEngine {
             this.collisionMeshes.delete(modelName);
         }
         
+        // Store original materials
+        this.originalMaterials.set(modelName, []);
+        model.traverse((child) => {
+            if (child.isMesh) {
+                this.originalMaterials.get(modelName).push({
+                    mesh: child,
+                    material: child.material.clone()
+                });
+            }
+        });
+        
         // Create a simplified collision mesh
         const collisionMesh = model.clone();
         
@@ -1297,6 +1475,11 @@ class GameEngine {
         // Update the collision mesh to match the model's current transform
         this.updateCollisionMesh(model);
         
+        // Show the toggle button
+        const toggleButton = document.getElementById('toggle-collision-mesh');
+        toggleButton.style.display = 'block';
+        toggleButton.textContent = 'Show Collision Mesh';
+        
         // Show a confirmation message
         const confirmationMsg = document.createElement('div');
         confirmationMsg.textContent = 'Collision mesh created successfully!';
@@ -1319,6 +1502,69 @@ class GameEngine {
         }, 2000);
         
         console.log(`Created collision mesh for model: ${modelName}`);
+    }
+    
+    // Toggle collision mesh visibility
+    toggleCollisionMeshVisibility() {
+        if (!this.selectedModel) return;
+        
+        const modelName = this.getModelName(this.selectedModel);
+        const collisionMesh = this.collisionMeshes.get(modelName);
+        const toggleButton = document.getElementById('toggle-collision-mesh');
+        
+        if (!collisionMesh) return;
+        
+        this.isCollisionMeshVisible = !this.isCollisionMeshVisible;
+        
+        if (this.isCollisionMeshVisible) {
+            // Show collision mesh in wireframe
+            collisionMesh.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = new THREE.MeshBasicMaterial({
+                        color: 0xffff00,
+                        wireframe: true,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                }
+            });
+            
+            // Hide original model
+            this.selectedModel.traverse((child) => {
+                if (child.isMesh) {
+                    child.visible = false;
+                }
+            });
+            
+            toggleButton.textContent = 'Hide Collision Mesh';
+        } else {
+            // Hide collision mesh
+            collisionMesh.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = new THREE.MeshBasicMaterial({
+                        visible: false,
+                        transparent: true,
+                        opacity: 0
+                    });
+                }
+            });
+            
+            // Show original model with original materials
+            this.selectedModel.traverse((child) => {
+                if (child.isMesh) {
+                    child.visible = true;
+                }
+            });
+            
+            // Restore original materials
+            if (this.originalMaterials.has(modelName)) {
+                this.originalMaterials.get(modelName).forEach(item => {
+                    item.mesh.material = item.material;
+                });
+            }
+            
+            toggleButton.textContent = 'Show Collision Mesh';
+        }
     }
     
     // Update a collision mesh to match its model's transform
@@ -1361,8 +1607,50 @@ class GameEngine {
             // Also remove the collision mesh if it exists
             this.removeCollisionMesh(modelName);
             
+            // Remove original materials
+            if (this.originalMaterials.has(modelName)) {
+                this.originalMaterials.delete(modelName);
+            }
+            
             console.log(`Removed model: ${modelName}`);
         }
+    }
+
+    // Create crosshair element
+    createCrosshair() {
+        this.crosshair = document.createElement('div');
+        this.crosshair.style.position = 'fixed';
+        this.crosshair.style.top = '50%';
+        this.crosshair.style.left = '50%';
+        this.crosshair.style.transform = 'translate(-50%, -50%)';
+        this.crosshair.style.width = '20px';
+        this.crosshair.style.height = '20px';
+        this.crosshair.style.pointerEvents = 'none';
+        this.crosshair.style.zIndex = '1000';
+        this.crosshair.style.display = 'none';
+        
+        // Create crosshair lines
+        const horizontal = document.createElement('div');
+        horizontal.style.position = 'absolute';
+        horizontal.style.top = '50%';
+        horizontal.style.left = '0';
+        horizontal.style.width = '100%';
+        horizontal.style.height = '2px';
+        horizontal.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+        
+        const vertical = document.createElement('div');
+        vertical.style.position = 'absolute';
+        vertical.style.top = '0';
+        vertical.style.left = '50%';
+        vertical.style.width = '2px';
+        vertical.style.height = '100%';
+        vertical.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+        
+        this.crosshair.appendChild(horizontal);
+        this.crosshair.appendChild(vertical);
+        
+        // Add to the document body instead of the engine container
+        document.body.appendChild(this.crosshair);
     }
 }
 

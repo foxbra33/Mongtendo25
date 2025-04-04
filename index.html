@@ -172,6 +172,17 @@
             cursor: not-allowed;
         }
         
+        /* Add styles for active toolbar buttons */
+        button.active {
+            background-color: #ff9800;
+            box-shadow: 0 0 10px rgba(255, 152, 0, 0.5);
+            transform: scale(1.05);
+        }
+        
+        button.active:hover {
+            background-color: #f57c00;
+        }
+        
         #position-display {
             margin-top: 10px;
             padding: 10px;
@@ -631,6 +642,7 @@
                     </div>
                 </div>
                 <button id="create-collision-mesh">Create Collision Mesh</button>
+                <button id="toggle-collision-mesh" style="display: none;">Show Collision Mesh</button>
                 <button id="place-model">Place Model</button>
             </div>
         </div>

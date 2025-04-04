@@ -151,6 +151,48 @@ function updateProjectHierarchy() {
     }
 }
 
+// Update spawn point buttons based on current state
+window.updateSpawnPointButtons = function() {
+    const createBtn = document.getElementById('create-spawn-point');
+    const moveBtn = document.getElementById('move-spawn-point');
+    const deleteBtn = document.getElementById('delete-spawn-point');
+    const cancelBtn = document.getElementById('cancel-spawn-point');
+    
+    if (!createBtn || !moveBtn || !deleteBtn || !cancelBtn) {
+        console.warn('Some spawn point buttons are not found in the DOM');
+        return;
+    }
+
+    // Reset all buttons to default state
+    createBtn.style.display = 'block';
+    moveBtn.style.display = 'block';
+    deleteBtn.style.display = 'block';
+    cancelBtn.style.display = 'none';
+    
+    // Remove active class from all buttons
+    createBtn.classList.remove('active');
+    moveBtn.classList.remove('active');
+    deleteBtn.classList.remove('active');
+    cancelBtn.classList.remove('active');
+
+    // If we're placing a spawn point, show only the cancel button and highlight create button
+    if (engine.isPlacingSpawnPoint) {
+        createBtn.style.display = 'none';
+        moveBtn.style.display = 'none';
+        deleteBtn.style.display = 'none';
+        cancelBtn.style.display = 'block';
+        createBtn.classList.add('active');
+    }
+    // If we're moving a spawn point, show only the cancel button and highlight move button
+    else if (engine.isMovingSpawnPoint) {
+        createBtn.style.display = 'none';
+        moveBtn.style.display = 'none';
+        deleteBtn.style.display = 'none';
+        cancelBtn.style.display = 'block';
+        moveBtn.classList.add('active');
+    }
+};
+
 // Initialize UI when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
     // Initialize theme
@@ -186,70 +228,43 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
-    
-    // Update spawn point buttons based on current state
-    function updateSpawnPointButtons() {
-        const createBtn = document.getElementById('create-spawn-point');
-        const moveBtn = document.getElementById('move-spawn-point');
-        const deleteBtn = document.getElementById('delete-spawn-point');
-        const cancelBtn = document.getElementById('cancel-spawn-point');
-        
-        if (!createBtn || !moveBtn || !deleteBtn || !cancelBtn) {
-            console.warn('Some spawn point buttons are not found in the DOM');
-            return;
-        }
-        
-        if (engine.isPlacingSpawnPoint) {
-            createBtn.disabled = true;
-            moveBtn.disabled = true;
-            deleteBtn.disabled = true;
-            cancelBtn.disabled = false;
-        } else if (engine.isMovingSpawnPoint) {
-            createBtn.disabled = true;
-            moveBtn.disabled = true;
-            deleteBtn.disabled = false;
-            cancelBtn.disabled = false;
-        } else {
-            createBtn.disabled = false;
-            moveBtn.disabled = false;
-            deleteBtn.disabled = false;
-            cancelBtn.disabled = true;
-        }
-    }
-    
-    // Set up spawn point buttons
-    const createBtn = document.getElementById('create-spawn-point');
-    const moveBtn = document.getElementById('move-spawn-point');
-    const deleteBtn = document.getElementById('delete-spawn-point');
-    const cancelBtn = document.getElementById('cancel-spawn-point');
-    
-    if (createBtn && moveBtn && deleteBtn && cancelBtn) {
-        createBtn.addEventListener('click', () => {
+
+    // Add event listeners for spawn point buttons
+    const createSpawnPointBtn = document.getElementById('create-spawn-point');
+    const moveSpawnPointBtn = document.getElementById('move-spawn-point');
+    const deleteSpawnPointBtn = document.getElementById('delete-spawn-point');
+    const cancelSpawnPointBtn = document.getElementById('cancel-spawn-point');
+
+    if (createSpawnPointBtn) {
+        createSpawnPointBtn.addEventListener('click', () => {
             engine.startPlacingSpawnPoint();
             updateSpawnPointButtons();
         });
-        
-        moveBtn.addEventListener('click', () => {
+    }
+
+    if (moveSpawnPointBtn) {
+        moveSpawnPointBtn.addEventListener('click', () => {
             engine.startMovingSpawnPoint();
             updateSpawnPointButtons();
         });
-        
-        deleteBtn.addEventListener('click', () => {
+    }
+
+    if (deleteSpawnPointBtn) {
+        deleteSpawnPointBtn.addEventListener('click', () => {
             engine.deleteSelectedSpawnPoint();
             updateProjectHierarchy();
-            updateSpawnPointButtons();
         });
-        
-        cancelBtn.addEventListener('click', () => {
+    }
+
+    if (cancelSpawnPointBtn) {
+        cancelSpawnPointBtn.addEventListener('click', () => {
             engine.cancelPlacingSpawnPoint();
             updateSpawnPointButtons();
         });
-        
-        // Initial update of spawn point buttons
-        updateSpawnPointButtons();
-    } else {
-        console.warn('Some spawn point buttons are not found in the DOM');
     }
+
+    // Initial update of spawn point buttons
+    updateSpawnPointButtons();
 });
 
 // Make functions available globally
