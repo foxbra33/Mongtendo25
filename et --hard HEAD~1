@@ -1,0 +1,5 @@
+[33m3931dd3[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m)[m Initial commit: Added 3D game engine with model loading, scene management, and spawn point functionality
+[33m9a7cdb3[m Added spawn point functionality with toolbar and UI controls
+[33m63a947b[m Fixed white screen issue and improved scene initialization
+[33mdf0a4f7[m Added OBJ/MTL loader support and improved model loading with camera centering
+[33mc0919db[m Initial commit: 3D Game Engine with model management

@@ -70,6 +70,27 @@
             animation: glow 2s ease-in-out infinite alternate;
         }
         
+        #exit-play-mode {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            transition: background-color 0.3s;
+        }
+        
+        #exit-play-mode:hover {
+            background-color: #d32f2f;
+        }
+        
         @keyframes glow {
             from {
                 text-shadow: 
@@ -299,6 +320,120 @@
             display: flex;
             align-items: center;
         }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 10px;
+        }
+
+        .slider-group label {
+            margin-bottom: 5px;
+            color: var(--text-color);
+        }
+
+        .slider-group input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+
+        .slider-group span {
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            text-align: right;
+        }
+
+        .position-inputs {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: var(--hierarchy-bg);
+            border-radius: 4px;
+        }
+
+        .position-input-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .position-input-row label {
+            width: 20px;
+            margin-right: 5px;
+            margin-bottom: 0;
+        }
+
+        .position-input-row input {
+            flex: 1;
+            padding: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            background-color: var(--panel-bg);
+            color: var(--text-color);
+        }
+
+        .background-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .background-type, .color-picker {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .background-type select, .color-picker input {
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            background-color: var(--panel-bg);
+            color: var(--text-color);
+        }
+
+        #particle-controls {
+            display: none;
+        }
+
+        #particle-controls.active {
+            display: block;
+        }
+
+        .mode-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .mode-controls button {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--button-bg);
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .mode-controls button:hover {
+            background-color: var(--button-hover);
+        }
+
+        .mode-controls button.active {
+            background-color: #2196F3;
+        }
+
+        .mode-controls button.active:hover {
+            background-color: #1976D2;
+        }
+
+        #play-mode {
+            background-color: #4CAF50;
+        }
+
+        #play-mode:hover {
+            background-color: #45a049;
+        }
     </style>
     <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
     <script type="importmap">
@@ -313,6 +448,7 @@
 <body>
     <div id="engine-container">
         <div id="engine-title">MONGTENDO ENGINE V1.0</div>
+        <button id="exit-play-mode">Exit Play Mode</button>
     </div>
     
     <div id="controls-panel">
@@ -325,6 +461,14 @@
                 <input type="checkbox" id="theme-toggle">
                 <span class="theme-toggle-slider"></span>
             </label>
+        </div>
+
+        <div class="control-group">
+            <h3>Mode</h3>
+            <div class="mode-controls">
+                <button id="edit-mode" class="active">Edit Mode</button>
+                <button id="play-mode">Play Mode</button>
+            </div>
         </div>
         
         <div class="control-group">
@@ -350,6 +494,44 @@
                 <p style="color: var(--text-secondary);">Click "Create Spawn Point" to add a spawn point to the scene.</p>
                 <p style="color: var(--text-secondary);">Use the mouse wheel to adjust height.</p>
                 <p style="color: var(--text-secondary);">Click on a spawn point to select it.</p>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>Background Effects</h3>
+            <div class="background-controls">
+                <div class="background-type">
+                    <label>Background Type:</label>
+                    <select id="background-type">
+                        <option value="solid">Solid Color</option>
+                        <option value="space">Space Theme</option>
+                        <option value="snow">Snow</option>
+                        <option value="rain">Rain</option>
+                    </select>
+                </div>
+                
+                <div class="color-picker" id="solid-color-controls">
+                    <label>Background Color:</label>
+                    <input type="color" id="background-color" value="#000000">
+                </div>
+
+                <div class="particle-controls" id="particle-controls">
+                    <div class="slider-group">
+                        <label>Particle Count</label>
+                        <input type="range" id="particle-count" min="100" max="10000" value="1000">
+                        <span id="particle-count-value">1000</span>
+                    </div>
+                    <div class="slider-group">
+                        <label>Particle Speed</label>
+                        <input type="range" id="particle-speed" min="0.1" max="5" value="1" step="0.1">
+                        <span id="particle-speed-value">1</span>
+                    </div>
+                    <div class="slider-group">
+                        <label>Particle Size</label>
+                        <input type="range" id="particle-size" min="0.1" max="5" value="1" step="0.1">
+                        <span id="particle-size-value">1</span>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -410,6 +592,47 @@
             <div id="position-display"></div>
             
             <button onclick="deleteModel()" style="background-color: #f44336;">Delete Model</button>
+        </div>
+        
+        <div class="control-group">
+            <h3>Edit Model</h3>
+            <div class="edit-model-controls">
+                <button id="select-model">Select Model</button>
+                <button id="cancel-model-edit" style="background-color: #f44336;">Cancel</button>
+            </div>
+            <div id="model-edit-info">
+                <p style="color: var(--text-secondary);">Click "Select Model" to choose a model to edit.</p>
+                <p style="color: var(--text-secondary);">Click on a model in the scene to select it.</p>
+                <p style="color: var(--text-secondary);">Use W, A, S, D keys to move the model horizontally.</p>
+                <p style="color: var(--text-secondary);">Use Q, E keys to move the model vertically.</p>
+                <p style="color: var(--text-secondary);">Use the slider below to adjust the model's scale.</p>
+                <p style="color: var(--text-secondary);">Click the "Place Model" button to place the model.</p>
+            </div>
+            <div id="selected-model-info" style="display: none;">
+                <h4>Selected Model: <span id="selected-model-name"></span></h4>
+                <div class="slider-group">
+                    <label>Scale</label>
+                    <input type="range" id="model-scale-slider" min="0.1" max="10" value="1" step="0.1">
+                    <span id="model-scale-value">1</span>
+                </div>
+                <div class="position-inputs">
+                    <label>Position:</label>
+                    <div class="position-input-row">
+                        <label for="model-pos-x">X:</label>
+                        <input type="number" id="model-pos-x" step="0.1">
+                    </div>
+                    <div class="position-input-row">
+                        <label for="model-pos-y">Y:</label>
+                        <input type="number" id="model-pos-y" step="0.1">
+                    </div>
+                    <div class="position-input-row">
+                        <label for="model-pos-z">Z:</label>
+                        <input type="number" id="model-pos-z" step="0.1">
+                    </div>
+                </div>
+                <button id="create-collision-mesh">Create Collision Mesh</button>
+                <button id="place-model">Place Model</button>
+            </div>
         </div>
         
         <div class="control-group">

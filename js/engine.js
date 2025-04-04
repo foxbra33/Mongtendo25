@@ -4,6 +4,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import BackgroundEffects from './backgroundEffects.js';
+import FirstPersonControls from './firstPersonControls.js';
 
 class GameEngine {
     constructor() {
@@ -40,10 +42,37 @@ class GameEngine {
         this.pulseTime = 0;
         this.pulseSpeed = 2; // Speed of the pulse animation
 
+        // Model editing properties
+        this.isEditingModel = false;
+        this.selectedModel = null;
+        this.modelOutline = null;
+        this.modelPlane = new THREE.Plane();
+        this.modelIntersection = new THREE.Vector3();
+        this.modelOffset = new THREE.Vector3();
+        this.modelOriginalScale = new THREE.Vector3();
+        this.modelMoveSpeed = 0.2; // Increased from 0.1 to 0.2 (2x faster)
+        this.collisionMeshes = new Map(); // Store collision meshes for models
+
         // Bind event handlers to maintain 'this' context
         this.onMouseMove = this.onMouseMove.bind(this);
         this.onMouseClick = this.onMouseClick.bind(this);
         this.onMouseWheel = this.onMouseWheel.bind(this);
+
+        // Initialize background effects
+        this.backgroundEffects = new BackgroundEffects(this.scene);
+        this.backgroundEffects.init();
+
+        // Initialize first-person controls
+        this.firstPersonControls = new FirstPersonControls(this.camera, this.renderer.domElement);
+        this.firstPersonControls.init();
+
+        // Mode state
+        this.currentMode = 'edit';
+        this.lastEditCameraPosition = new THREE.Vector3();
+        this.lastEditCameraTarget = new THREE.Vector3();
+
+        // Set up mode switching
+        this.setupModeControls();
 
         // Wait for DOM to be ready
         if (document.readyState === 'loading') {
@@ -51,6 +80,134 @@ class GameEngine {
         } else {
             this.init();
         }
+    }
+
+    setupModeControls() {
+        const editModeBtn = document.getElementById('edit-mode');
+        const playModeBtn = document.getElementById('play-mode');
+        const exitPlayModeBtn = document.getElementById('exit-play-mode');
+
+        editModeBtn.addEventListener('click', () => {
+            if (this.currentMode === 'play') {
+                this.switchToEditMode();
+            }
+        });
+
+        playModeBtn.addEventListener('click', () => {
+            if (this.currentMode === 'edit') {
+                this.switchToPlayMode();
+            }
+        });
+        
+        exitPlayModeBtn.addEventListener('click', () => {
+            if (this.currentMode === 'play') {
+                this.switchToEditMode();
+            }
+        });
+    }
+
+    switchToEditMode() {
+        this.currentMode = 'edit';
+        document.getElementById('edit-mode').classList.add('active');
+        document.getElementById('play-mode').classList.remove('active');
+
+        // Restore editor camera
+        this.camera.position.copy(this.lastEditCameraPosition);
+        this.controls.target.copy(this.lastEditCameraTarget);
+        this.controls.enabled = true;
+        this.firstPersonControls.unlock();
+
+        // Show UI elements
+        document.getElementById('controls-panel').style.display = 'block';
+        
+        // Hide exit play mode button
+        document.getElementById('exit-play-mode').style.display = 'none';
+    }
+
+    switchToPlayMode() {
+        if (this.currentMode === 'play') return;
+        
+        // Check if there are spawn points
+        if (this.spawnPoints.length === 0) {
+            alert('No spawn points found. Please add at least one spawn point before entering play mode.');
+            return;
+        }
+        
+        // Show spawn point selection dialog
+        const spawnPointList = document.createElement('div');
+        spawnPointList.style.position = 'fixed';
+        spawnPointList.style.top = '50%';
+        spawnPointList.style.left = '50%';
+        spawnPointList.style.transform = 'translate(-50%, -50%)';
+        spawnPointList.style.backgroundColor = 'var(--panel-bg)';
+        spawnPointList.style.padding = '20px';
+        spawnPointList.style.borderRadius = '8px';
+        spawnPointList.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
+        spawnPointList.style.zIndex = '1000';
+        spawnPointList.style.color = 'var(--text-color)';
+
+        const title = document.createElement('h3');
+        title.textContent = 'Select Spawn Point';
+        title.style.marginBottom = '10px';
+        spawnPointList.appendChild(title);
+
+        this.spawnPoints.forEach((spawnPoint, index) => {
+            const button = document.createElement('button');
+            button.textContent = `Spawn Point ${index + 1}`;
+            button.style.display = 'block';
+            button.style.width = '100%';
+            button.style.marginBottom = '5px';
+            button.style.padding = '8px';
+            button.style.border = 'none';
+            button.style.borderRadius = '4px';
+            button.style.backgroundColor = 'var(--button-bg)';
+            button.style.color = 'white';
+            button.style.cursor = 'pointer';
+
+            button.addEventListener('click', () => {
+                document.body.removeChild(spawnPointList);
+                this.startPlayMode(spawnPoint);
+            });
+
+            spawnPointList.appendChild(button);
+        });
+
+        document.body.appendChild(spawnPointList);
+    }
+
+    startPlayMode(spawnPoint) {
+        // Switch to play mode
+        this.currentMode = 'play';
+        
+        // Update UI
+        document.getElementById('edit-mode').classList.remove('active');
+        document.getElementById('play-mode').classList.add('active');
+        
+        // Hide edit mode UI
+        document.getElementById('controls-panel').style.display = 'none';
+        
+        // Show exit play mode button
+        document.getElementById('exit-play-mode').style.display = 'block';
+        
+        // Store editor camera position
+        this.lastEditCameraPosition.copy(this.camera.position);
+        this.lastEditCameraTarget.copy(this.controls.target);
+        
+        // Disable orbit controls
+        this.controls.enabled = false;
+        
+        // Enable first-person controls
+        this.firstPersonControls.init();
+        this.firstPersonControls.lock();
+        
+        // Set player position to the selected spawn point
+        this.firstPersonControls.setPosition(spawnPoint.position);
+        
+        // Pass collision meshes to first-person controls
+        const collisionMeshesArray = Array.from(this.collisionMeshes.values());
+        this.firstPersonControls.setCollisionMeshes(collisionMeshesArray);
+        
+        console.log('Switched to play mode');
     }
 
     init() {
@@ -111,6 +268,9 @@ class GameEngine {
         rendererElement.addEventListener('click', (event) => this.onMouseClick(event));
         rendererElement.addEventListener('wheel', (event) => this.onMouseWheel(event));
         
+        // Set up model editing
+        this.setupModelEditing();
+        
         // Handle window resize
         window.addEventListener('resize', () => {
             const width = window.innerWidth - 300;
@@ -131,18 +291,35 @@ class GameEngine {
     }
 
     animate() {
-        requestAnimationFrame(() => this.animate());
+        requestAnimationFrame(this.animate.bind(this));
         
-        if (this.controls) {
+        const delta = 0.016; // Assuming 60fps
+        
+        if (this.currentMode === 'edit') {
             this.controls.update();
+        } else {
+            this.firstPersonControls.update(delta);
         }
         
-        // Update pulse animation for spawn points
-        this.pulseTime += 0.016 * this.pulseSpeed; // Assuming 60fps
-        if (this.isPlacingSpawnPoint && this.selectedSpawnPoint) {
-            const pulse = Math.sin(this.pulseTime) * 0.3 + 0.7; // Oscillate between 0.4 and 1.0
-            this.selectedSpawnPoint.material.opacity = pulse;
-            this.selectedSpawnPoint.scale.set(pulse, pulse, 1);
+        this.backgroundEffects.update();
+        
+        // Update spawn point pulse animation
+        if (this.spawnPoints.length > 0) {
+            const time = Date.now() * 0.001;
+            this.spawnPoints.forEach(spawnPoint => {
+                const scale = 1 + Math.sin(time * 2) * 0.2;
+                spawnPoint.scale.set(scale, scale, scale);
+                
+                const opacity = 0.5 + Math.sin(time * 2) * 0.3;
+                spawnPoint.material.opacity = opacity;
+            });
+        }
+        
+        // Update model outline animation
+        if (this.modelOutline) {
+            const time = Date.now() * 0.001;
+            const pulse = 1 + Math.sin(time * 3) * 0.1;
+            this.modelOutline.material.opacity = 0.5 + Math.sin(time * 3) * 0.3;
         }
         
         this.renderer.render(this.scene, this.camera);
@@ -169,7 +346,8 @@ class GameEngine {
                     x: model.rotation.x,
                     y: model.rotation.y,
                     z: model.rotation.z
-                }
+                },
+                hasCollisionMesh: this.collisionMeshes.has(name)
             })),
             spawnPoints: this.getSpawnPoints(),
             camera: {
@@ -355,6 +533,12 @@ class GameEngine {
         console.log(`Position: ${position.x}, ${position.y}, ${position.z}`);
         console.log(`Scale: ${scale.x}, ${scale.y}, ${scale.z}`);
         console.log(`Skip camera centering: ${skipCameraCenter}`);
+        
+        // Check if a model with this name already exists
+        if (this.models.has(name)) {
+            console.error(`A model with the name "${name}" already exists. Please use a different name.`);
+            throw new Error(`A model with the name "${name}" already exists. Please use a different name.`);
+        }
         
         try {
             let model;
@@ -672,10 +856,47 @@ class GameEngine {
         // Update raycaster
         this.raycaster.setFromCamera(this.mouse, this.camera);
         
-        if (this.isPlacingSpawnPoint && this.selectedSpawnPoint) {
+        // If in model editing mode, check for model selection
+        if (this.isEditingModel) {
+            // Get all models in the scene
+            const modelObjects = Array.from(this.models.values());
+            
+            // Check for intersections with models
+            const intersects = this.raycaster.intersectObjects(modelObjects, true);
+            
+            if (intersects.length > 0) {
+                // Find the top-level model that was clicked
+                let clickedModel = intersects[0].object;
+                while (clickedModel.parent && !this.models.has(this.getModelName(clickedModel))) {
+                    clickedModel = clickedModel.parent;
+                }
+                
+                // Select the model
+                this.selectModel(clickedModel);
+                
+                // Set up the model's plane for dragging
+                this.modelPlane.setFromNormalAndCoplanarPoint(
+                    new THREE.Vector3(0, 1, 0),
+                    clickedModel.position
+                );
+                
+                // Calculate offset from intersection to model center
+                this.modelOffset.set(
+                    clickedModel.position.x - this.modelIntersection.x,
+                    0,
+                    clickedModel.position.z - this.modelIntersection.z
+                );
+                
+                return;
+            }
+        }
+        // If placing a spawn point and a spawn point is selected, place it
+        else if (this.isPlacingSpawnPoint && this.selectedSpawnPoint) {
             // Place the spawn point
             this.placeSpawnPoint();
-        } else if (this.isMovingSpawnPoint) {
+        }
+        // If moving a spawn point, check for spawn point selection
+        else if (this.isMovingSpawnPoint) {
             // Check if we clicked on a spawn point
             const intersects = this.raycaster.intersectObjects(this.spawnPoints);
             
@@ -687,7 +908,9 @@ class GameEngine {
                 // Deselect if we clicked elsewhere
                 this.selectedSpawnPoint = null;
             }
-        } else {
+        }
+        // Otherwise, check for spawn point selection
+        else {
             // Check if we clicked on a spawn point
             const intersects = this.raycaster.intersectObjects(this.spawnPoints);
             
@@ -703,6 +926,7 @@ class GameEngine {
     }
     
     onMouseWheel(event) {
+        // If placing or moving a spawn point, adjust its height
         if (this.selectedSpawnPoint && (this.isPlacingSpawnPoint || this.isMovingSpawnPoint)) {
             // Move the spawn point up or down
             const delta = event.deltaY * 0.01;
@@ -747,6 +971,398 @@ class GameEngine {
                 z: spawnPoint.position.z
             }
         }));
+    }
+
+    setupModelEditing() {
+        const selectModelBtn = document.getElementById('select-model');
+        const cancelModelEditBtn = document.getElementById('cancel-model-edit');
+        const modelScaleSlider = document.getElementById('model-scale-slider');
+        const modelScaleValue = document.getElementById('model-scale-value');
+        const placeModelBtn = document.getElementById('place-model');
+        const modelPosX = document.getElementById('model-pos-x');
+        const modelPosY = document.getElementById('model-pos-y');
+        const modelPosZ = document.getElementById('model-pos-z');
+        const createCollisionMeshBtn = document.getElementById('create-collision-mesh');
+        
+        selectModelBtn.addEventListener('click', () => {
+            if (!this.isEditingModel) {
+                this.startModelEditing();
+            }
+        });
+        
+        cancelModelEditBtn.addEventListener('click', () => {
+            if (this.isEditingModel) {
+                this.cancelModelEditing();
+            }
+        });
+        
+        modelScaleSlider.addEventListener('input', () => {
+            if (this.selectedModel) {
+                const scale = parseFloat(modelScaleSlider.value);
+                modelScaleValue.textContent = scale.toFixed(1);
+                this.selectedModel.scale.set(
+                    this.modelOriginalScale.x * scale,
+                    this.modelOriginalScale.y * scale,
+                    this.modelOriginalScale.z * scale
+                );
+                
+                // Update collision mesh if it exists
+                this.updateCollisionMesh(this.selectedModel);
+            }
+        });
+        
+        // Add event listeners for manual position inputs
+        modelPosX.addEventListener('input', () => {
+            if (this.selectedModel) {
+                const x = parseFloat(modelPosX.value);
+                this.selectedModel.position.x = x;
+                this.updateModelOutline();
+                
+                // Update collision mesh if it exists
+                this.updateCollisionMesh(this.selectedModel);
+            }
+        });
+        
+        modelPosY.addEventListener('input', () => {
+            if (this.selectedModel) {
+                const y = parseFloat(modelPosY.value);
+                this.selectedModel.position.y = y;
+                this.updateModelOutline();
+                
+                // Update collision mesh if it exists
+                this.updateCollisionMesh(this.selectedModel);
+            }
+        });
+        
+        modelPosZ.addEventListener('input', () => {
+            if (this.selectedModel) {
+                const z = parseFloat(modelPosZ.value);
+                this.selectedModel.position.z = z;
+                this.updateModelOutline();
+                
+                // Update collision mesh if it exists
+                this.updateCollisionMesh(this.selectedModel);
+            }
+        });
+        
+        // Add event listener for create collision mesh button
+        createCollisionMeshBtn.addEventListener('click', () => {
+            if (this.selectedModel) {
+                this.createCollisionMesh(this.selectedModel);
+            }
+        });
+        
+        placeModelBtn.addEventListener('click', () => {
+            if (this.selectedModel) {
+                // Place the model at its current position
+                this.saveSceneState();
+                console.log(`Placed model ${this.getModelName(this.selectedModel)} at current position`);
+                
+                // Show a confirmation message
+                const confirmationMsg = document.createElement('div');
+                confirmationMsg.textContent = 'Model placed successfully!';
+                confirmationMsg.style.position = 'fixed';
+                confirmationMsg.style.top = '50%';
+                confirmationMsg.style.left = '50%';
+                confirmationMsg.style.transform = 'translate(-50%, -50%)';
+                confirmationMsg.style.backgroundColor = 'var(--panel-bg)';
+                confirmationMsg.style.padding = '20px';
+                confirmationMsg.style.borderRadius = '8px';
+                confirmationMsg.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
+                confirmationMsg.style.zIndex = '1000';
+                confirmationMsg.style.color = 'var(--text-color)';
+                
+                document.body.appendChild(confirmationMsg);
+                
+                // Remove the message after 2 seconds
+                setTimeout(() => {
+                    document.body.removeChild(confirmationMsg);
+                }, 2000);
+            }
+        });
+        
+        // Add keyboard event listeners for WASD movement
+        document.addEventListener('keydown', (event) => {
+            if (this.isEditingModel && this.selectedModel) {
+                switch (event.key.toLowerCase()) {
+                    case 'w':
+                        this.selectedModel.position.z -= this.modelMoveSpeed;
+                        this.updateModelOutline();
+                        this.updatePositionInputs();
+                        
+                        // Update collision mesh if it exists
+                        this.updateCollisionMesh(this.selectedModel);
+                        break;
+                    case 's':
+                        this.selectedModel.position.z += this.modelMoveSpeed;
+                        this.updateModelOutline();
+                        this.updatePositionInputs();
+                        
+                        // Update collision mesh if it exists
+                        this.updateCollisionMesh(this.selectedModel);
+                        break;
+                    case 'a':
+                        this.selectedModel.position.x -= this.modelMoveSpeed;
+                        this.updateModelOutline();
+                        this.updatePositionInputs();
+                        
+                        // Update collision mesh if it exists
+                        this.updateCollisionMesh(this.selectedModel);
+                        break;
+                    case 'd':
+                        this.selectedModel.position.x += this.modelMoveSpeed;
+                        this.updateModelOutline();
+                        this.updatePositionInputs();
+                        
+                        // Update collision mesh if it exists
+                        this.updateCollisionMesh(this.selectedModel);
+                        break;
+                    case 'q':
+                        this.selectedModel.position.y += this.modelMoveSpeed;
+                        this.updateModelOutline();
+                        this.updatePositionInputs();
+                        
+                        // Update collision mesh if it exists
+                        this.updateCollisionMesh(this.selectedModel);
+                        break;
+                    case 'e':
+                        this.selectedModel.position.y -= this.modelMoveSpeed;
+                        this.updateModelOutline();
+                        this.updatePositionInputs();
+                        
+                        // Update collision mesh if it exists
+                        this.updateCollisionMesh(this.selectedModel);
+                        break;
+                }
+            }
+        });
+    }
+    
+    startModelEditing() {
+        this.isEditingModel = true;
+        document.getElementById('select-model').textContent = 'Selecting...';
+        document.getElementById('select-model').disabled = true;
+        document.getElementById('cancel-model-edit').disabled = false;
+        document.getElementById('model-edit-info').style.display = 'block';
+        document.getElementById('selected-model-info').style.display = 'none';
+        
+        // Change cursor style
+        this.renderer.domElement.style.cursor = 'crosshair';
+        
+        console.log('Started model editing mode');
+    }
+    
+    cancelModelEditing() {
+        this.isEditingModel = false;
+        document.getElementById('select-model').textContent = 'Select Model';
+        document.getElementById('select-model').disabled = false;
+        document.getElementById('cancel-model-edit').disabled = true;
+        document.getElementById('model-edit-info').style.display = 'block';
+        document.getElementById('selected-model-info').style.display = 'none';
+        
+        // Remove outline if a model was selected
+        if (this.selectedModel) {
+            this.removeModelOutline();
+            this.selectedModel = null;
+        }
+        
+        // Change cursor style
+        this.renderer.domElement.style.cursor = 'auto';
+        
+        console.log('Cancelled model editing mode');
+    }
+    
+    selectModel(model) {
+        if (this.selectedModel === model) return;
+        
+        // Remove outline from previously selected model
+        if (this.selectedModel) {
+            this.removeModelOutline();
+        }
+        
+        this.selectedModel = model;
+        
+        // Create outline for the selected model
+        this.createModelOutline(model);
+        
+        // Store original scale
+        this.modelOriginalScale.copy(model.scale);
+        
+        // Update UI
+        document.getElementById('selected-model-name').textContent = this.getModelName(model);
+        document.getElementById('model-scale-slider').value = '1';
+        document.getElementById('model-scale-value').textContent = '1';
+        
+        // Update position inputs
+        this.updatePositionInputs();
+        
+        document.getElementById('model-edit-info').style.display = 'none';
+        document.getElementById('selected-model-info').style.display = 'block';
+        
+        console.log(`Selected model: ${this.getModelName(model)}`);
+    }
+    
+    getModelName(model) {
+        for (const [name, m] of this.models.entries()) {
+            if (m === model) {
+                return name;
+            }
+        }
+        return 'Unknown Model';
+    }
+    
+    createModelOutline(model) {
+        // Create a box geometry that encompasses the model
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        
+        const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+        const material = new THREE.MeshBasicMaterial({
+            color: 0x00ff00,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        this.modelOutline = new THREE.Mesh(geometry, material);
+        this.modelOutline.position.copy(center);
+        this.scene.add(this.modelOutline);
+    }
+    
+    removeModelOutline() {
+        if (this.modelOutline) {
+            this.scene.remove(this.modelOutline);
+            this.modelOutline = null;
+        }
+    }
+    
+    updateModelOutline() {
+        if (this.modelOutline && this.selectedModel) {
+            const box = new THREE.Box3().setFromObject(this.selectedModel);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+            
+            this.modelOutline.scale.set(
+                size.x / this.modelOutline.geometry.parameters.width,
+                size.y / this.modelOutline.geometry.parameters.height,
+                size.z / this.modelOutline.geometry.parameters.depth
+            );
+            this.modelOutline.position.copy(center);
+        }
+    }
+
+    // Add a new method to update the position input fields
+    updatePositionInputs() {
+        if (this.selectedModel) {
+            document.getElementById('model-pos-x').value = this.selectedModel.position.x.toFixed(2);
+            document.getElementById('model-pos-y').value = this.selectedModel.position.y.toFixed(2);
+            document.getElementById('model-pos-z').value = this.selectedModel.position.z.toFixed(2);
+        }
+    }
+
+    // Create a collision mesh for a model
+    createCollisionMesh(model) {
+        const modelName = this.getModelName(model);
+        
+        // Check if a collision mesh already exists for this model
+        if (this.collisionMeshes.has(modelName)) {
+            // If it exists, remove it first
+            const existingMesh = this.collisionMeshes.get(modelName);
+            this.scene.remove(existingMesh);
+            this.collisionMeshes.delete(modelName);
+        }
+        
+        // Create a simplified collision mesh
+        const collisionMesh = model.clone();
+        
+        // Remove all materials and make it invisible
+        collisionMesh.traverse((child) => {
+            if (child.isMesh) {
+                child.material = new THREE.MeshBasicMaterial({ 
+                    visible: false,
+                    transparent: true,
+                    opacity: 0
+                });
+            }
+        });
+        
+        // Add a prefix to the name
+        collisionMesh.name = `collision_${modelName}`;
+        
+        // Add to scene and store reference
+        this.scene.add(collisionMesh);
+        this.collisionMeshes.set(modelName, collisionMesh);
+        
+        // Update the collision mesh to match the model's current transform
+        this.updateCollisionMesh(model);
+        
+        // Show a confirmation message
+        const confirmationMsg = document.createElement('div');
+        confirmationMsg.textContent = 'Collision mesh created successfully!';
+        confirmationMsg.style.position = 'fixed';
+        confirmationMsg.style.top = '50%';
+        confirmationMsg.style.left = '50%';
+        confirmationMsg.style.transform = 'translate(-50%, -50%)';
+        confirmationMsg.style.backgroundColor = 'var(--panel-bg)';
+        confirmationMsg.style.padding = '20px';
+        confirmationMsg.style.borderRadius = '8px';
+        confirmationMsg.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
+        confirmationMsg.style.zIndex = '1000';
+        confirmationMsg.style.color = 'var(--text-color)';
+        
+        document.body.appendChild(confirmationMsg);
+        
+        // Remove the message after 2 seconds
+        setTimeout(() => {
+            document.body.removeChild(confirmationMsg);
+        }, 2000);
+        
+        console.log(`Created collision mesh for model: ${modelName}`);
+    }
+    
+    // Update a collision mesh to match its model's transform
+    updateCollisionMesh(model) {
+        const modelName = this.getModelName(model);
+        
+        if (this.collisionMeshes.has(modelName)) {
+            const collisionMesh = this.collisionMeshes.get(modelName);
+            
+            // Update position
+            collisionMesh.position.copy(model.position);
+            
+            // Update rotation
+            collisionMesh.rotation.copy(model.rotation);
+            
+            // Update scale
+            collisionMesh.scale.copy(model.scale);
+            
+            console.log(`Updated collision mesh for model: ${modelName}`);
+        }
+    }
+    
+    // Remove a collision mesh
+    removeCollisionMesh(modelName) {
+        if (this.collisionMeshes.has(modelName)) {
+            const collisionMesh = this.collisionMeshes.get(modelName);
+            this.scene.remove(collisionMesh);
+            this.collisionMeshes.delete(modelName);
+            console.log(`Removed collision mesh for model: ${modelName}`);
+        }
+    }
+
+    // Override the removeModel method to also remove collision meshes
+    removeModel(modelName) {
+        if (this.models.has(modelName)) {
+            const model = this.models.get(modelName);
+            this.scene.remove(model);
+            this.models.delete(modelName);
+            
+            // Also remove the collision mesh if it exists
+            this.removeCollisionMesh(modelName);
+            
+            console.log(`Removed model: ${modelName}`);
+        }
     }
 }
 
